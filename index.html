@@ -84,13 +84,22 @@
             border: 1px solid #ff4444;
             max-width: 80%;
         }
+        
+        #loadingProgress {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #888;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
         
-        <div id="loading">INITIALISATION DU MOTEUR...<br><small>Chargement des modules 3D</small></div>
+        <div id="loading">
+            INITIALISATION DU MOTEUR...<br>
+            <div id="loadingProgress">Chargement des bibliothèques 3D...</div>
+        </div>
         
         <div id="errorMessage" class="hidden">
             <strong>ERREUR DE CHARGEMENT</strong><br>
@@ -116,7 +125,45 @@
         </div>
     </div>
     
-    <!-- Chargement en tant que module ES pour éviter les erreurs 'export' -->
-    <script type="module" src="src/main.js"></script>
+    <!-- Retour aux builds UMD pour compatibilité Mac -->
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/cannon@0.20.2/build/cannon.min.js"></script>
+    <script>
+        // Vérification du chargement
+        document.getElementById('loadingProgress').textContent = 'Vérification des modules...';
+        
+        function updateLoadingProgress(message) {
+            document.getElementById('loadingProgress').textContent = message;
+        }
+        
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.remove('hidden');
+        }
+        
+        // Timeout de sécurité
+        setTimeout(() => {
+            if (!window.gameInitialized) {
+                showError('Timeout de chargement. Rechargez la page ou essayez un autre navigateur.');
+            }
+        }, 10000); // 10 secondes max
+        
+        // Vérification WebGL
+        if (!window.WebGLRenderingContext) {
+            showError('WebGL non supporté par ce navigateur.');
+        } else {
+            // Attendre que les scripts soient chargés puis lancer le jeu
+            setTimeout(() => {
+                if (typeof THREE !== 'undefined' && typeof CANNON !== 'undefined') {
+                    updateLoadingProgress('Démarrage du moteur de jeu...');
+                    // Le script main.js se chargera après
+                } else {
+                    showError('Échec du chargement des bibliothèques 3D.');
+                }
+            }, 500);
+        }
+    </script>
+    <script src="src/main.js"></script>
 </body>
 </html>
