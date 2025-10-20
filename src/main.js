@@ -1,6 +1,10 @@
 // Infinite Car Racing 3D - Main Game Engine
 // Utilise Three.js pour le rendu 3D et Cannon-es pour la physique
 
+// Imports des modules ES depuis CDN
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
 class InfiniteCarGame {
     constructor() {
         this.scene = null;
@@ -35,6 +39,16 @@ class InfiniteCarGame {
     
     async init() {
         try {
+            // Vérifie que les modules sont chargés
+            if (!THREE || !CANNON) {
+                throw new Error('Modules Three.js ou Cannon-es non chargés');
+            }
+            
+            console.log('✅ Modules chargés: Three.js', THREE.REVISION, '+ Cannon-es');
+            
+            // Gestion des erreurs WebGL pour Mac M4
+            this.setupWebGLErrorHandling();
+            
             this.setupRenderer();
             this.setupScene();
             this.setupPhysics();
@@ -55,19 +69,39 @@ class InfiniteCarGame {
             console.log('🏁 Jeu initialisé avec succès!');
         } catch (error) {
             console.error('❌ Erreur d\'initialisation:', error);
-            document.getElementById('loading').textContent = 'ERREUR: ' + error.message;
+            this.showError('Erreur d\'initialisation: ' + error.message);
         }
+    }
+    
+    setupWebGLErrorHandling() {
+        const canvas = document.getElementById('gameCanvas');
+        
+        // Gestion de la perte de contexte WebGL (problème Mac M4)
+        canvas.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            console.error('🚫 Contexte WebGL perdu (bug Mac M4 connu)');
+            this.showError('Contexte WebGL perdu. Essayez Firefox ou rechargez la page.');
+        }, false);
+        
+        canvas.addEventListener('webglcontextrestored', () => {
+            console.log('✅ Contexte WebGL restauré');
+            // Pourrions re-initialiser ici si nécessaire
+        }, false);
     }
     
     setupRenderer() {
         const canvas = document.getElementById('gameCanvas');
+        
+        // Configuration optimisée pour Mac M4
         this.renderer = new THREE.WebGLRenderer({ 
             canvas: canvas, 
             antialias: true,
-            powerPreference: "high-performance"
+            powerPreference: "high-performance",
+            failIfMajorPerformanceCaveat: false // Permet le fallback logiciel
         });
         
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+        // Réduit le pixel ratio pour éviter les problèmes M4
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -289,6 +323,12 @@ class InfiniteCarGame {
         };
     }
     
+    showError(message) {
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('errorText').textContent = message;
+        document.getElementById('errorMessage').classList.remove('hidden');
+    }
+    
     onKeyDown(event) {
         if (this.gameState.isPaused) return;
         
@@ -505,5 +545,22 @@ class InfiniteCarGame {
 // Démarre le jeu quand la page est chargée
 window.addEventListener('load', () => {
     console.log('🚗 Initialisation du jeu de course 3D...');
-    new InfiniteCarGame();
+    
+    // Vérification de compatibilité
+    if (!window.WebGLRenderingContext) {
+        console.error('❌ WebGL non supporté par ce navigateur');
+        document.getElementById('errorText').textContent = 'WebGL non supporté. Utilisez un navigateur plus récent.';
+        document.getElementById('errorMessage').classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+        return;
+    }
+    
+    try {
+        new InfiniteCarGame();
+    } catch (error) {
+        console.error('❌ Erreur fatale:', error);
+        document.getElementById('errorText').textContent = 'Erreur fatale: ' + error.message;
+        document.getElementById('errorMessage').classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+    }
 });
