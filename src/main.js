@@ -1,9 +1,6 @@
 // Infinite Car Racing 3D - Main Game Engine
-// Utilise Three.js pour le rendu 3D et Cannon-es pour la physique
-
-// Imports des modules ES depuis CDN
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+// Version simplifiée pour compatibilité Mac M4
+// Utilise Three.js et Cannon.js en global
 
 class InfiniteCarGame {
     constructor() {
@@ -12,7 +9,6 @@ class InfiniteCarGame {
         this.renderer = null;
         this.world = null;
         this.car = null;
-        this.road = [];
         this.roadSegments = [];
         
         this.gameState = {
@@ -30,297 +26,77 @@ class InfiniteCarGame {
             handbrake: false
         };
         
-        this.clock = new THREE.Clock();
         this.frameCount = 0;
-        this.lastFPSUpdate = 0;
+        this.lastFPSUpdate = performance.now();
         
+        // Démarrage immédiat
         this.init();
     }
     
-    async init() {
+    init() {
+        console.log('🚗 Démarrage de l\'initialisation...');
+        
         try {
-            // Vérifie que les modules sont chargés
-            if (!THREE || !CANNON) {
-                throw new Error('Modules Three.js ou Cannon-es non chargés');
+            // Vérifie que les librairies sont disponibles
+            if (typeof THREE === 'undefined') {
+                throw new Error('Three.js non chargé');
+            }
+            if (typeof CANNON === 'undefined') {
+                throw new Error('Cannon.js non chargé');
             }
             
-            console.log('✅ Modules chargés: Three.js', THREE.REVISION, '+ Cannon-es');
+            console.log('✅ Librairies détectées: Three.js', THREE.REVISION, '+ Cannon.js');
             
-            // Gestion des erreurs WebGL pour Mac M4
-            this.setupWebGLErrorHandling();
-            
+            this.updateProgress('Initialisation du renderer...');
             this.setupRenderer();
+            
+            this.updateProgress('Création de la scène 3D...');
             this.setupScene();
+            
+            this.updateProgress('Démarrage du moteur physique...');
             this.setupPhysics();
+            
+            this.updateProgress('Configuration de la caméra...');
             this.setupCamera();
+            
+            this.updateProgress('Ajout de l’éclairage...');
             this.setupLighting();
+            
+            this.updateProgress('Création du véhicule...');
             this.setupCar();
+            
+            this.updateProgress('Génération de la route...');
             this.setupRoad();
+            
+            this.updateProgress('Activation des contrôles...');
             this.setupControls();
             this.setupUI();
             
+            // Finalisation
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('ui').classList.remove('hidden');
             document.getElementById('controls').classList.remove('hidden');
             
             this.gameState.isGameRunning = true;
-            this.gameLoop();
+            window.gameInitialized = true;
             
             console.log('🏁 Jeu initialisé avec succès!');
+            
+            // Démarrage de la boucle de jeu
+            this.gameLoop();
+            
         } catch (error) {
             console.error('❌ Erreur d\'initialisation:', error);
-            this.showError('Erreur d\'initialisation: ' + error.message);
+            this.showError('Erreur: ' + error.message);
         }
     }
     
-    setupWebGLErrorHandling() {
-        const canvas = document.getElementById('gameCanvas');
-        
-        // Gestion de la perte de contexte WebGL (problème Mac M4)
-        canvas.addEventListener('webglcontextlost', (event) => {
-            event.preventDefault();
-            console.error('🚫 Contexte WebGL perdu (bug Mac M4 connu)');
-            this.showError('Contexte WebGL perdu. Essayez Firefox ou rechargez la page.');
-        }, false);
-        
-        canvas.addEventListener('webglcontextrestored', () => {
-            console.log('✅ Contexte WebGL restauré');
-            // Pourrions re-initialiser ici si nécessaire
-        }, false);
-    }
-    
-    setupRenderer() {
-        const canvas = document.getElementById('gameCanvas');
-        
-        // Configuration optimisée pour Mac M4
-        this.renderer = new THREE.WebGLRenderer({ 
-            canvas: canvas, 
-            antialias: true,
-            powerPreference: "high-performance",
-            failIfMajorPerformanceCaveat: false // Permet le fallback logiciel
-        });
-        
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        // Réduit le pixel ratio pour éviter les problèmes M4
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.setClearColor(0x87CEEB, 1); // Bleu ciel
-        
-        // Responsive
-        window.addEventListener('resize', () => this.onWindowResize());
-    }
-    
-    setupScene() {
-        this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.Fog(0x87CEEB, 50, 1000);
-    }
-    
-    setupPhysics() {
-        this.world = new CANNON.World({
-            gravity: new CANNON.Vec3(0, -30, 0),
-            broadphase: new CANNON.NaiveBroadphase(),
-            allowSleep: true
-        });
-        
-        // Matériaux physiques
-        this.materials = {
-            ground: new CANNON.Material('ground'),
-            car: new CANNON.Material('car')
-        };
-        
-        // Contact entre voiture et sol
-        const carGroundContact = new CANNON.ContactMaterial(
-            this.materials.car,
-            this.materials.ground,
-            {
-                friction: 0.8,
-                restitution: 0.1
-            }
-        );
-        
-        this.world.addContactMaterial(carGroundContact);
-    }
-    
-    setupCamera() {
-        this.camera = new THREE.PerspectiveCamera(
-            75,
-            window.innerWidth / window.innerHeight,
-            0.1,
-            2000
-        );
-        
-        // Position initiale de la caméra (sera mise à jour pour suivre la voiture)
-        this.camera.position.set(0, 15, 20);
-        this.camera.lookAt(0, 0, 0);
-    }
-    
-    setupLighting() {
-        // Lumière ambiante
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
-        this.scene.add(ambientLight);
-        
-        // Soleil
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(50, 100, 50);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        directionalLight.shadow.camera.near = 0.5;
-        directionalLight.shadow.camera.far = 500;
-        directionalLight.shadow.camera.left = -100;
-        directionalLight.shadow.camera.right = 100;
-        directionalLight.shadow.camera.top = 100;
-        directionalLight.shadow.camera.bottom = -100;
-        
-        this.scene.add(directionalLight);
-    }
-    
-    setupCar() {
-        // Géométrie placeholder de la voiture (sera remplacée par un modèle 3D)
-        const carGroup = new THREE.Group();
-        
-        // Carrosserie
-        const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
-        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.position.y = 0.5;
-        body.castShadow = true;
-        carGroup.add(body);
-        
-        // Roues
-        const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
-        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-        
-        const wheels = [];
-        const wheelPositions = [
-            { x: -1, y: 0.4, z: 1.3 },  // Avant gauche
-            { x: 1, y: 0.4, z: 1.3 },   // Avant droite
-            { x: -1, y: 0.4, z: -1.3 }, // Arrière gauche
-            { x: 1, y: 0.4, z: -1.3 }   // Arrière droite
-        ];
-        
-        wheelPositions.forEach((pos, index) => {
-            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-            wheel.position.set(pos.x, pos.y, pos.z);
-            wheel.rotation.z = Math.PI / 2;
-            wheel.castShadow = true;
-            carGroup.add(wheel);
-            wheels.push(wheel);
-        });
-        
-        this.car = {
-            mesh: carGroup,
-            wheels: wheels,
-            wheelBodies: []
-        };
-        
-        this.scene.add(carGroup);
-        
-        // Corps physique de la voiture
-        const carShape = new CANNON.Shape();
-        carShape.type = CANNON.Shape.types.BOX;
-        carShape.halfExtents = new CANNON.Vec3(1, 0.5, 2);
-        
-        this.car.body = new CANNON.Body({ 
-            mass: 1000,
-            material: this.materials.car
-        });
-        this.car.body.addShape(carShape);
-        this.car.body.position.set(0, 2, 0);
-        
-        // Contraintes des roues (simulation basique)
-        this.car.vehicle = new CANNON.RigidVehicle({
-            chassisBody: this.car.body
-        });
-        
-        this.world.addBody(this.car.body);
-    }
-    
-    setupRoad() {
-        // Génère la route infinie avec des segments
-        const segmentLength = 50;
-        const segmentWidth = 20;
-        const segmentsToGenerate = 20;
-        
-        for (let i = 0; i < segmentsToGenerate; i++) {
-            this.createRoadSegment(i * segmentLength, segmentWidth, segmentLength);
+    updateProgress(message) {
+        const progress = document.getElementById('loadingProgress');
+        if (progress) {
+            progress.textContent = message;
         }
-    }
-    
-    createRoadSegment(zPosition, width, length) {
-        const segmentGroup = new THREE.Group();
-        
-        // Route
-        const roadGeometry = new THREE.PlaneGeometry(width, length);
-        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-        const road = new THREE.Mesh(roadGeometry, roadMaterial);
-        road.rotation.x = -Math.PI / 2;
-        road.position.z = zPosition;
-        road.receiveShadow = true;
-        segmentGroup.add(road);
-        
-        // Bandes blanches
-        for (let i = -1; i <= 1; i += 2) {
-            const lineGeometry = new THREE.PlaneGeometry(0.5, length);
-            const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
-            line.rotation.x = -Math.PI / 2;
-            line.position.set(i * (width / 4), 0.01, zPosition);
-            segmentGroup.add(line);
-        }
-        
-        // Herbe sur les côtés
-        [-1, 1].forEach(side => {
-            const grassGeometry = new THREE.PlaneGeometry(30, length);
-            const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-            const grass = new THREE.Mesh(grassGeometry, grassMaterial);
-            grass.rotation.x = -Math.PI / 2;
-            grass.position.set(side * (width/2 + 15), -0.1, zPosition);
-            grass.receiveShadow = true;
-            segmentGroup.add(grass);
-        });
-        
-        // Physique du sol
-        const groundShape = new CANNON.Plane();
-        const groundBody = new CANNON.Body({ 
-            mass: 0,
-            material: this.materials.ground
-        });
-        groundBody.addShape(groundShape);
-        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-        groundBody.position.set(0, 0, zPosition);
-        
-        this.world.addBody(groundBody);
-        
-        const segment = {
-            mesh: segmentGroup,
-            body: groundBody,
-            zPosition: zPosition
-        };
-        
-        this.roadSegments.push(segment);
-        this.scene.add(segmentGroup);
-        
-        return segment;
-    }
-    
-    setupControls() {
-        // Gestion des événements clavier
-        document.addEventListener('keydown', (event) => this.onKeyDown(event));
-        document.addEventListener('keyup', (event) => this.onKeyUp(event));
-        
-        // Empêche le menu contextuel
-        document.addEventListener('contextmenu', (event) => event.preventDefault());
-    }
-    
-    setupUI() {
-        // Les éléments UI sont déjà dans le HTML
-        this.ui = {
-            speed: document.getElementById('speed'),
-            distance: document.getElementById('distance'),
-            fps: document.getElementById('fps')
-        };
+        console.log('🔧', message);
     }
     
     showError(message) {
@@ -329,152 +105,230 @@ class InfiniteCarGame {
         document.getElementById('errorMessage').classList.remove('hidden');
     }
     
-    onKeyDown(event) {
-        if (this.gameState.isPaused) return;
+    setupRenderer() {
+        const canvas = document.getElementById('gameCanvas');
         
-        switch (event.code) {
-            case 'ArrowUp':
-            case 'KeyW':
-                this.controls.forward = true;
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                this.controls.backward = true;
-                break;
-            case 'ArrowLeft':
-            case 'KeyA':
-                this.controls.left = true;
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                this.controls.right = true;
-                break;
-            case 'Space':
-                event.preventDefault();
-                this.controls.handbrake = true;
-                break;
-            case 'KeyR':
-                this.resetCar();
-                break;
-            case 'KeyP':
-                this.togglePause();
-                break;
+        // Configuration compatible Mac M4
+        this.renderer = new THREE.WebGLRenderer({ 
+            canvas: canvas, 
+            antialias: false,  // Désactivé pour performance
+            powerPreference: "default",  // Pas high-performance sur M4
+            failIfMajorPerformanceCaveat: false
+        });
+        
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(1); // Forcé à 1 pour éviter les problèmes M4
+        this.renderer.shadowMap.enabled = false; // Pas d'ombres pour commencer
+        this.renderer.setClearColor(0x87CEEB, 1);
+        
+        // Responsive
+        window.addEventListener('resize', () => this.onWindowResize());
+        
+        // Gestion contexte perdu
+        canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.error('⚠️ Contexte WebGL perdu');
+            this.showError('Contexte WebGL perdu. Rechargez la page.');
+        });
+    }
+    
+    setupScene() {
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.Fog(0x87CEEB, 100, 800); // Fog réduit
+    }
+    
+    setupPhysics() {
+        this.world = new CANNON.World();
+        this.world.gravity.set(0, -20, 0); // Gravité réduite
+        this.world.broadphase = new CANNON.NaiveBroadphase();
+        
+        // Matériaux basiques
+        this.materials = {
+            ground: new CANNON.Material('ground'),
+            car: new CANNON.Material('car')
+        };
+        
+        const contact = new CANNON.ContactMaterial(
+            this.materials.car,
+            this.materials.ground,
+            { friction: 0.4, restitution: 0.1 }
+        );
+        this.world.addContactMaterial(contact);
+    }
+    
+    setupCamera() {
+        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.set(0, 10, 15);
+    }
+    
+    setupLighting() {
+        // Éclairage minimal pour performance
+        const ambient = new THREE.AmbientLight(0x404040, 1.5);
+        this.scene.add(ambient);
+        
+        const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+        directional.position.set(10, 10, 5);
+        this.scene.add(directional);
+    }
+    
+    setupCar() {
+        // Voiture très simple
+        const carGroup = new THREE.Group();
+        
+        // Corps principal
+        const bodyGeometry = new THREE.BoxGeometry(1.8, 0.8, 3.5);
+        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff2222 });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.4;
+        carGroup.add(body);
+        
+        // 4 roues simples
+        const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8);
+        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        
+        const wheelPositions = [
+            [-0.8, 0.3, 1.2], [0.8, 0.3, 1.2],
+            [-0.8, 0.3, -1.2], [0.8, 0.3, -1.2]
+        ];
+        
+        wheelPositions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.position.set(...pos);
+            wheel.rotation.z = Math.PI / 2;
+            carGroup.add(wheel);
+        });
+        
+        this.car = { mesh: carGroup };
+        this.scene.add(carGroup);
+        
+        // Physique simple
+        const shape = new CANNON.Sphere(1);
+        this.car.body = new CANNON.Body({ mass: 1000, material: this.materials.car });
+        this.car.body.addShape(shape);
+        this.car.body.position.set(0, 2, 0);
+        this.world.add(this.car.body);
+    }
+    
+    setupRoad() {
+        // Route très simple - juste quelques segments
+        for (let i = 0; i < 10; i++) {
+            this.createRoadSegment(i * 40 - 200);
         }
     }
     
-    onKeyUp(event) {
-        switch (event.code) {
-            case 'ArrowUp':
-            case 'KeyW':
-                this.controls.forward = false;
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                this.controls.backward = false;
-                break;
-            case 'ArrowLeft':
-            case 'KeyA':
-                this.controls.left = false;
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                this.controls.right = false;
-                break;
-            case 'Space':
-                this.controls.handbrake = false;
-                break;
-        }
+    createRoadSegment(zPos) {
+        const group = new THREE.Group();
+        
+        // Route principale
+        const roadGeometry = new THREE.PlaneGeometry(15, 40);
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+        const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = zPos;
+        group.add(road);
+        
+        // Ligne centrale
+        const lineGeometry = new THREE.PlaneGeometry(0.3, 40);
+        const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const line = new THREE.Mesh(lineGeometry, lineMaterial);
+        line.rotation.x = -Math.PI / 2;
+        line.position.set(0, 0.01, zPos);
+        group.add(line);
+        
+        // Sol physique
+        const groundShape = new CANNON.Plane();
+        const groundBody = new CANNON.Body({ mass: 0, material: this.materials.ground });
+        groundBody.addShape(groundShape);
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        groundBody.position.set(0, 0, zPos);
+        this.world.add(groundBody);
+        
+        const segment = { mesh: group, body: groundBody, zPos: zPos };
+        this.roadSegments.push(segment);
+        this.scene.add(group);
     }
     
-    updateCar(deltaTime) {
+    setupControls() {
+        document.addEventListener('keydown', (e) => {
+            switch (e.code) {
+                case 'KeyW': case 'ArrowUp': this.controls.forward = true; break;
+                case 'KeyS': case 'ArrowDown': this.controls.backward = true; break;
+                case 'KeyA': case 'ArrowLeft': this.controls.left = true; break;
+                case 'KeyD': case 'ArrowRight': this.controls.right = true; break;
+                case 'Space': e.preventDefault(); this.controls.handbrake = true; break;
+                case 'KeyR': this.resetCar(); break;
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW': case 'ArrowUp': this.controls.forward = false; break;
+                case 'KeyS': case 'ArrowDown': this.controls.backward = false; break;
+                case 'KeyA': case 'ArrowLeft': this.controls.left = false; break;
+                case 'KeyD': case 'ArrowRight': this.controls.right = false; break;
+                case 'Space': this.controls.handbrake = false; break;
+            }
+        });
+    }
+    
+    setupUI() {
+        this.ui = {
+            speed: document.getElementById('speed'),
+            distance: document.getElementById('distance'),
+            fps: document.getElementById('fps')
+        };
+    }
+    
+    updateCar() {
         if (!this.car.body) return;
         
         const force = new CANNON.Vec3();
         const torque = new CANNON.Vec3();
         
-        const maxForce = 15000;
-        const maxTorque = 1000;
+        if (this.controls.forward) force.z = -8000;
+        if (this.controls.backward) force.z = 4000;
+        if (this.controls.left) torque.y = 500;
+        if (this.controls.right) torque.y = -500;
         
-        // Accélération/Frein
-        if (this.controls.forward) {
-            force.z = -maxForce;
-        } else if (this.controls.backward) {
-            force.z = maxForce * 0.7; // Moins puissant en marche arrière
-        }
-        
-        // Direction
-        if (this.controls.left) {
-            torque.y = maxTorque;
-        } else if (this.controls.right) {
-            torque.y = -maxTorque;
-        }
-        
-        // Frein à main
         if (this.controls.handbrake) {
-            const velocity = this.car.body.velocity;
-            const dampingForce = velocity.scale(-5000);
-            force.vadd(dampingForce, force);
+            this.car.body.velocity.scale(0.9, this.car.body.velocity);
         }
         
-        // Applique les forces
         this.car.body.applyLocalForce(force, new CANNON.Vec3(0, 0, 0));
         this.car.body.applyTorque(torque);
         
-        // Friction naturelle
-        this.car.body.velocity.scale(0.98, this.car.body.velocity);
+        // Friction
+        this.car.body.velocity.scale(0.99, this.car.body.velocity);
         this.car.body.angularVelocity.scale(0.95, this.car.body.angularVelocity);
         
-        // Met à jour la position du mesh
+        // Sync visual
         this.car.mesh.position.copy(this.car.body.position);
         this.car.mesh.quaternion.copy(this.car.body.quaternion);
         
-        // Calcule la vitesse
-        const velocity = this.car.body.velocity.length();
-        this.gameState.speed = velocity * 3.6; // Conversion m/s vers km/h
-        
-        // Met à jour la distance
+        // Stats
+        this.gameState.speed = this.car.body.velocity.length() * 3.6;
         this.gameState.distance = Math.abs(this.car.body.position.z);
     }
     
     updateCamera() {
         if (!this.car.body) return;
         
-        const carPosition = this.car.body.position;
-        const carQuaternion = this.car.body.quaternion;
+        const carPos = this.car.body.position;
+        const targetPos = new THREE.Vector3(carPos.x, carPos.y + 8, carPos.z + 12);
         
-        // Caméra qui suit la voiture
-        const cameraOffset = new CANNON.Vec3(0, 8, 15);
-        const worldOffset = new CANNON.Vec3();
-        carQuaternion.vmult(cameraOffset, worldOffset);
-        
-        const targetPosition = carPosition.vadd(worldOffset);
-        
-        // Interpolation douce
-        this.camera.position.lerp(
-            new THREE.Vector3(targetPosition.x, targetPosition.y, targetPosition.z),
-            0.1
-        );
-        
-        // Regarde la voiture
-        this.camera.lookAt(
-            carPosition.x,
-            carPosition.y + 1,
-            carPosition.z - 5
-        );
+        this.camera.position.lerp(targetPos, 0.1);
+        this.camera.lookAt(carPos.x, carPos.y, carPos.z - 3);
     }
     
     updateRoad() {
         if (!this.car.body) return;
         
         const carZ = this.car.body.position.z;
-        const segmentLength = 50;
         
-        // Recycle les segments de route derrière la voiture
         this.roadSegments.forEach(segment => {
-            if (segment.zPosition > carZ + 200) {
-                // Déplace le segment devant
-                const newZ = carZ - 500;
-                segment.zPosition = newZ;
+            if (segment.zPos > carZ + 100) {
+                const newZ = carZ - 200;
+                segment.zPos = newZ;
                 segment.mesh.position.z = newZ;
                 segment.body.position.z = newZ;
             }
@@ -482,10 +336,12 @@ class InfiniteCarGame {
     }
     
     updateUI() {
+        if (!this.ui.speed) return;
+        
         this.ui.speed.textContent = Math.round(this.gameState.speed);
         this.ui.distance.textContent = Math.round(this.gameState.distance);
         
-        // FPS (mis à jour une fois par seconde)
+        // FPS
         this.frameCount++;
         const now = performance.now();
         if (now - this.lastFPSUpdate > 1000) {
@@ -498,16 +354,10 @@ class InfiniteCarGame {
     
     resetCar() {
         if (!this.car.body) return;
-        
-        this.car.body.position.set(0, 5, this.car.body.position.z);
+        this.car.body.position.set(0, 3, this.car.body.position.z);
         this.car.body.quaternion.set(0, 0, 0, 1);
         this.car.body.velocity.set(0, 0, 0);
         this.car.body.angularVelocity.set(0, 0, 0);
-    }
-    
-    togglePause() {
-        this.gameState.isPaused = !this.gameState.isPaused;
-        console.log(this.gameState.isPaused ? '⏸️ Jeu en pause' : '▶️ Jeu repris');
     }
     
     onWindowResize() {
@@ -521,18 +371,10 @@ class InfiniteCarGame {
         
         requestAnimationFrame(() => this.gameLoop());
         
-        if (this.gameState.isPaused) {
-            this.renderer.render(this.scene, this.camera);
-            return;
-        }
+        // Update physique (60Hz fixe pour stabilité)
+        this.world.step(1/60);
         
-        const deltaTime = this.clock.getDelta();
-        
-        // Met à jour la physique
-        this.world.step(deltaTime);
-        
-        // Met à jour les composants du jeu
-        this.updateCar(deltaTime);
+        this.updateCar();
         this.updateCamera();
         this.updateRoad();
         this.updateUI();
@@ -542,25 +384,25 @@ class InfiniteCarGame {
     }
 }
 
-// Démarre le jeu quand la page est chargée
+// Attendre le chargement complet
 window.addEventListener('load', () => {
-    console.log('🚗 Initialisation du jeu de course 3D...');
+    console.log('🚗 Page chargée, vérification des dépendances...');
     
-    // Vérification de compatibilité
-    if (!window.WebGLRenderingContext) {
-        console.error('❌ WebGL non supporté par ce navigateur');
-        document.getElementById('errorText').textContent = 'WebGL non supporté. Utilisez un navigateur plus récent.';
-        document.getElementById('errorMessage').classList.remove('hidden');
-        document.getElementById('loading').classList.add('hidden');
-        return;
-    }
-    
-    try {
-        new InfiniteCarGame();
-    } catch (error) {
-        console.error('❌ Erreur fatale:', error);
-        document.getElementById('errorText').textContent = 'Erreur fatale: ' + error.message;
-        document.getElementById('errorMessage').classList.remove('hidden');
-        document.getElementById('loading').classList.add('hidden');
-    }
+    // Délai pour s'assurer que tout est chargé
+    setTimeout(() => {
+        try {
+            if (typeof THREE === 'undefined') {
+                throw new Error('Three.js non disponible');
+            }
+            if (typeof CANNON === 'undefined') {
+                throw new Error('Cannon.js non disponible');
+            }
+            
+            new InfiniteCarGame();
+            
+        } catch (error) {
+            console.error('❌ Erreur fatale:', error);
+            document.getElementById('loadingProgress').textContent = 'ERREUR: ' + error.message;
+        }
+    }, 1000); // Attendre 1 seconde
 });
