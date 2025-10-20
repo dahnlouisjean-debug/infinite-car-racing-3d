@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Car Racing 3D</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #gameCanvas {
+            display: block;
+            cursor: none;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            color: #00ff41;
+            font-size: 18px;
+            text-shadow: 0 0 10px #00ff41;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            color: #00ff41;
+            font-size: 14px;
+            text-align: right;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #00ff41;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ff41;
+            font-size: 24px;
+            z-index: 200;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="loading">INITIALISATION DU MOTEUR...</div>
+        
+        <div id="ui" class="hidden">
+            <div>VITESSE: <span id="speed">0</span> km/h</div>
+            <div>DISTANCE: <span id="distance">0</span> m</div>
+            <div>FPS: <span id="fps">60</span></div>
+        </div>
+        
+        <div id="controls" class="hidden">
+            <div><strong>CONTROLES</strong></div>
+            <div>↑/W - Accélération</div>
+            <div>↓/S - Frein/Marche arrière</div>
+            <div>←/A - Tourner à gauche</div>
+            <div>→/D - Tourner à droite</div>
+            <div>ESPACE - Frein à main</div>
+            <div>R - Reset voiture</div>
+            <div>P - Pause</div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+    <script src="src/main.js"></script>
+</body>
+</html>
