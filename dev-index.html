@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinite Car Racing 3D - Dev</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0e1225;color:#00ff41;font-family:Arial,Helvetica,sans-serif}
+    #game{position:relative;width:100vw;height:100vh}
+    #hud{position:absolute;top:16px;left:16px;z-index:10}
+    #hud .card{background:rgba(0,0,0,.6);border:1px solid #00ff41;border-radius:8px;padding:10px;margin-bottom:8px}
+    #controls{position:absolute;bottom:16px;right:16px;z-index:10}
+    canvas{display:block}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+  <script type="module">
+    import { Input } from './src/engine/input.js';
+    import { initAll, updateAll, Registry } from './src/engine/registry.js';
+    import './src/ui/hud.js';
+    import './src/game/road.js';
+    import './src/game/car.js';
+
+    const ctx = {};
+
+    // three bootstrap
+    const canvas = document.createElement('canvas');
+    document.getElementById('game').appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x87CEEB,1);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x87CEEB, 60, 800);
+    const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1500);
+    camera.position.set(0,9,14);
+
+    // lights
+    scene.add(new THREE.AmbientLight(0x404040, 1.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(20,30,10); scene.add(sun);
+
+    // context
+    ctx.scene = scene; ctx.camera = camera; ctx.renderer = renderer;
+    ctx.input = new Input(); ctx.input.init();
+
+    initAll(ctx);
+
+    // ui
+    const ui = document.getElementById('ui'); ui.style.display='block';
+
+    // loop
+    let last = performance.now();
+    function loop(){
+      requestAnimationFrame(loop);
+      const now = performance.now();
+      let dt = Math.min(0.033, (now-last)/1000); last = now;
+
+      updateAll(ctx, dt);
+
+      // chase camera
+      if (ctx.player){
+        const p = ctx.player.mesh.position; const r = ctx.player.rot;
+        const target = new THREE.Vector3(p.x - Math.sin(r)*12, p.y + 7, p.z - Math.cos(r)*12);
+        camera.position.lerp(target, 0.12);
+        camera.lookAt(new THREE.Vector3(p.x, p.y+1, p.z));
+      }
+
+      renderer.render(scene, camera);
+    }
+    loop();
+
+    // resize
+    addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+  </script>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="hud">
+    <div class="card">Vitesse: <span id="speed">0</span> km/h</div>
+    <div class="card">Distance: <span id="distance">0</span> m</div>
+    <div class="card">FPS: <span id="fps">60</span></div>
+  </div>
+  <div id="controls" class="card">
+    W/S/↑/↓ Accélérer/Freiner — A/D/←/→ Tourner — R Reset — P Pause
+  </div>
+</body>
+</html>
