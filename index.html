@@ -2,13 +2,17 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Infinite Car Racing 3D - Arcade</title>
+  <title>Infinite Drive 3D</title>
   <style>
     html,body{margin:0;height:100%;background:#7CC0EF;overflow:hidden}
     #hud{position:absolute;top:16px;left:16px;z-index:10}
     #hud .card{background:rgba(0,0,0,.7);border:1px solid #11e233;color:#11e233;border-radius:8px;padding:10px 16px;margin-bottom:8px;font-size:18px}
     #controls{position:absolute;bottom:16px;right:16px;z-index:10;background:rgba(0,0,0,.7);border:1px solid #11e233;border-radius:8px;padding:10px;color:#11e233}
-    #notice{position:absolute;top:16px;right:16px;z-index:10;background:rgba(0,0,0,.7);border:1px solid #11e233;border-radius:8px;padding:8px 12px;color:#11e233}
+    #options{position:absolute;top:16px;right:16px;z-index:10;background:rgba(0,0,0,.78);border:1px solid #11e233;border-radius:8px;padding:12px;color:#11e233;min-width:240px}
+    #options h3{margin:0 0 8px 0;font-size:16px}
+    .row{display:flex;justify-content:space-between;align-items:center;margin:6px 0}
+    .row label{font-size:12px;margin-right:8px}
+    .row input[type=range]{width:140px}
     canvas{display:block}
   </style>
 </head>
@@ -16,158 +20,119 @@
   <div id="hud">
     <div class="card">Vitesse: <span id="speed">0</span> km/h</div>
     <div class="card">Distance: <span id="distance">0</span> m</div>
-    <div class="card">Score: <span id="score">0</span></div>
     <div class="card">FPS: <span id="fps">60</span></div>
   </div>
-  <div id="controls" class="card">W/S/↑/↓ Accélérer/Freiner — A/D/←/→ Tourner — E Nitro — R Reset</div>
-  <div id="notice" class="card">Bonus: Near miss +50 | Ramassez les orbes verts</div>
+  <div id="controls" class="card">W/S/↑/↓ Accélérer/Freiner — A/D/←/→ Tourner — R Reset — O Options</div>
+  <div id="options" class="card">
+    <h3>Options de conduite</h3>
+    <div class="row"><label>Vitesse max</label><input id="opt_vmax" type="range" min="2" max="8" value="4.8" step="0.1"><span id="opt_vmax_v">4.8</span></div>
+    <div class="row"><label>Accélération</label><input id="opt_accel" type="range" min="3" max="14" value="7" step="0.1"><span id="opt_accel_v">7</span></div>
+    <div class="row"><label>Freinage</label><input id="opt_brake" type="range" min="3" max="14" value="6" step="0.1"><span id="opt_brake_v">6</span></div>
+    <div class="row"><label>Friction</label><input id="opt_friction" type="range" min="1" max="7" value="4" step="0.1"><span id="opt_friction_v">4</span></div>
+    <div class="row"><label>Virage (base)</label><input id="opt_steer" type="range" min="0.6" max="2.2" value="1.2" step="0.05"><span id="opt_steer_v">1.2</span></div>
+    <div class="row"><label>Gain avec vitesse</label><input id="opt_gain" type="range" min="6" max="20" value="12" step="0.5"><span id="opt_gain_v">12</span></div>
+    <div class="row"><label>Sensibilité (global)</label><input id="opt_sense" type="range" min="0.2" max="0.9" value="0.42" step="0.02"><span id="opt_sense_v">0.42</span></div>
+    <div class="row"><button id="closeOpt">Fermer (O)</button><button id="resetOpt" style="margin-left:8px">Par défaut</button></div>
+  </div>
 
-  <!-- Three.js via jsDelivr (stable) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
-  // ------- Paramètres gameplay -------
+  // ------- Paramètres (ralentis) -------
   const SETTINGS = {
-    accel: 11,
-    brake: 9,
-    steerBase: 1.45,
-    steerGainSpeed: 12,
-    friction: 3.6,
-    vmax: 6.2, // ~220 km/h échelle jeu
-    laneWidth: 3.2,
-    lanes: [-3.2, 0, 3.2],
-    spawnZGap: 45,
-    maxTraffic: 12,
-    orbEvery: 120, // mètres
-    nitroBoost: 1.8,
-    nitroTime: 2.0
+    accel: 7, brake: 6, steerBase: 1.2, steerGainSpeed: 12, friction: 4.0, vmax: 4.8,
+    laneWidth: 3.2, lanes: [-3.2, 0, 3.2], spawnZGap: 55, maxProps: 120,
+    sense: 0.42
   };
 
-  // ------- État global -------
-  let scene, camera, renderer;
-  let car, keys = {}, velocity = new THREE.Vector3(), rotation = 0;
-  let segments=[], L=40, N=22;
-  let traffic=[], lastSpawnZ=120; // voitures IA
-  let score=0, distance=0, lastFPS=performance.now(), frames=0;
-  let orbs=[], lastOrbZ=80; // collectibles
-  let nitroTimeLeft=0, nitroActive=false;
+  // ------- État -------
+  let scene, camera, renderer; let car, keys={}, velocity=new THREE.Vector3(), rotation=0;
+  let segments=[], L=40, N=22; let distance=0; let frames=0, lastFPS=performance.now();
+  let props=[]; // décor: arbres, lampadaires, panneaux
 
-  // ------- Utilitaires HUD -------
-  function setText(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; }
+  // ------- HUD -------
+  const T = (id) => document.getElementById(id);
+  const setText = (id,v)=>{ const el=T(id); if(el) el.textContent=v; };
 
-  // ------- Scène -------
   function bootstrap(){
-    scene = new THREE.Scene(); scene.fog=new THREE.Fog(0x87CEEB,60,650);
-    camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1500);
-    camera.position.set(0, 9, 14);
-    renderer = new THREE.WebGLRenderer({ antialias:true }); renderer.setSize(innerWidth, innerHeight); renderer.setClearColor(0x87CEEB,1); document.body.appendChild(renderer.domElement);
-    // Lumière
-    scene.add(new THREE.AmbientLight(0x404040, 1.8)); const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(18,30,10); scene.add(sun);
-    // Route infinie
+    scene=new THREE.Scene(); scene.fog=new THREE.Fog(0x87CEEB,60,650);
+    camera=new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1500); camera.position.set(0,9,14);
+    renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth,innerHeight); renderer.setClearColor(0x87CEEB,1); document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0x404040, 1.8)); const sun=new THREE.DirectionalLight(0xffffff,1.2); sun.position.set(18,30,10); scene.add(sun);
+
+    // Route + signalisation continue (bandes latérales + centrale)
     for(let i=0;i<N;i++){
-      const seg=new THREE.Mesh(new THREE.PlaneGeometry(18,L), new THREE.MeshLambertMaterial({color:0x454545}));
-      seg.rotation.x=-Math.PI/2; seg.position.z=i*L; scene.add(seg); segments.push(seg);
-      const line=new THREE.Mesh(new THREE.PlaneGeometry(0.4,L-2), new THREE.MeshBasicMaterial({color:0xffffff})); line.rotation.x=-Math.PI/2; line.position.set(0,0.01,i*L); scene.add(line);
-      [-1,1].forEach(s=>{ const g=new THREE.Mesh(new THREE.PlaneGeometry(28,L), new THREE.MeshLambertMaterial({color:0x2ccf3e})); g.rotation.x=-Math.PI/2; g.position.set(s*23,-0.08,i*L); scene.add(g);});
+      const z=i*L;
+      const road=new THREE.Mesh(new THREE.PlaneGeometry(20,L), new THREE.MeshLambertMaterial({color:0x3f3f3f})); road.rotation.x=-Math.PI/2; road.position.z=z; scene.add(road); segments.push(road);
+      // Ligne centrale pointillée
+      const dashCount=8; for(let d=0; d<dashCount; d++){ const dash=new THREE.Mesh(new THREE.PlaneGeometry(0.4, L/dashCount-2), new THREE.MeshBasicMaterial({color:0xffffff})); dash.rotation.x=-Math.PI/2; dash.position.set(0,0.02,z + d*(L/dashCount) - L/2 + (L/dashCount)/2); scene.add(dash); }
+      // Bandes latérales continues
+      [-9.6, 9.6].forEach(x=>{ const side=new THREE.Mesh(new THREE.PlaneGeometry(0.3, L-1), new THREE.MeshBasicMaterial({color:0xffffaa})); side.rotation.x=-Math.PI/2; side.position.set(x,0.015,z); scene.add(side); });
+      // Accotements/Herbe
+      [-1,1].forEach(s=>{ const g=new THREE.Mesh(new THREE.PlaneGeometry(28,L), new THREE.MeshLambertMaterial({color:0x2bc93b})); g.rotation.x=-Math.PI/2; g.position.set(s*24,-0.08,z); scene.add(g);});
     }
-    // Voiture joueur
-    car = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2,1,3.6), new THREE.MeshLambertMaterial({color:0xff3838})); body.position.y=0.5; car.add(body);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,1.9), new THREE.MeshLambertMaterial({color:0xdd1b1b})); roof.position.set(0,1.0,-0.1); car.add(roof);
-    const wGeo=new THREE.CylinderGeometry(0.38,0.38,0.22,12), wMat=new THREE.MeshLambertMaterial({color:0x222222});
-    [[-1,0.28,1.2],[1,0.28,1.2],[-1,0.28,-1.25],[1,0.28,-1.25]].forEach(p=>{const w=new THREE.Mesh(wGeo,wMat); w.rotation.z=Math.PI/2; w.position.set(...p); car.add(w);});
+
+    // Voiture
+    car=new THREE.Group(); const body=new THREE.Mesh(new THREE.BoxGeometry(2,1,3.6), new THREE.MeshLambertMaterial({color:0xff3838})); body.position.y=0.5; car.add(body);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,1.9), new THREE.MeshLambertMaterial({color:0xdd1b1b})); roof.position.set(0,1.0,-0.1); car.add(roof);
+    const wGeo=new THREE.CylinderGeometry(0.38,0.38,0.22,12), wMat=new THREE.MeshLambertMaterial({color:0x222222}); [[-1,0.28,1.2],[1,0.28,1.2],[-1,0.28,-1.25],[1,0.28,-1.25]].forEach(p=>{const w=new THREE.Mesh(wGeo,wMat); w.rotation.z=Math.PI/2; w.position.set(...p); car.add(w);});
     car.position.set(0,0,5); scene.add(car);
 
-    // Entrées
-    addEventListener('keydown', e=>{ keys[e.code]=true; if(e.code==='KeyR'){ resetPlayer(); } if(e.code==='KeyE'){ nitro(); }});
-    addEventListener('keyup', e=>{ keys[e.code]=false; });
+    // Décors: arbres, lampadaires, panneaux placés régulièrement
+    placeProps();
 
+    // Inputs
+    addEventListener('keydown', e=>{ keys[e.code]=true; if(e.code==='KeyR') resetPlayer(); if(e.code==='KeyO'){ toggleOptions(); }});
+    addEventListener('keyup', e=> keys[e.code]=false);
     addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+    // Options UI binding
+    bindOptions();
   }
 
-  // ------- Traffic (obstacles) -------
-  function spawnTraffic(zBase){
-    if(traffic.length>=SETTINGS.maxTraffic) return;
-    const lane = SETTINGS.lanes[Math.floor(Math.random()*SETTINGS.lanes.length)];
-    const carAI = new THREE.Mesh(new THREE.BoxGeometry(1.9,0.9,3.4), new THREE.MeshLambertMaterial({color:0x3355ff}));
-    carAI.position.set(lane, 0.45, zBase + SETTINGS.spawnZGap);
-    carAI.userData.speed = 2.2 + Math.random()*1.8; // vitesse IA
-    scene.add(carAI); traffic.push(carAI);
+  // ------- Décors -------
+  function addTree(x,z){ const t=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.35,2,8), new THREE.MeshLambertMaterial({color:0x5b3a1a})); const c=new THREE.Mesh(new THREE.SphereGeometry(1.2,12,12), new THREE.MeshLambertMaterial({color:0x2f8f2f})); t.position.set(x,1,z); c.position.set(x,2.2,z); scene.add(t); scene.add(c); props.push(t,c); }
+  function addLamp(x,z){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,3.5,10), new THREE.MeshLambertMaterial({color:0xcccccc})); const h=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.15,0.15), new THREE.MeshLambertMaterial({color:0xffffee})); p.position.set(x,1.75,z); h.position.set(x+0.4,3.3,z); scene.add(p); scene.add(h); props.push(p,h); }
+  function addSign(x,z){ const post=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.2,10), new THREE.MeshLambertMaterial({color:0xcccccc})); const panel=new THREE.Mesh(new THREE.PlaneGeometry(1.2,1.2), new THREE.MeshBasicMaterial({color:0x1188ff})); panel.position.set(x,1.6,z); panel.rotation.y = (x>0? -Math.PI/10 : Math.PI/10); post.position.set(x,1.1,z); scene.add(post); scene.add(panel); props.push(post,panel); }
+  function placeProps(){
+    // place des éléments tous les 20m de chaque côté, en quinconce
+    for(let z=20; z< N*L; z+=20){ addTree(-26, z); addTree(26, z+10); if(z%40===0){ addLamp(-22, z+5); addLamp(22, z+15); } if(z%60===0){ addSign(-21, z+8); addSign(21, z+18); }}
   }
 
-  function updateTraffic(dt){
-    const playerZ = car.position.z; const recycleZ = playerZ - 30;
-    for(let i=traffic.length-1;i>=0;i--){
-      const t = traffic[i]; t.position.z -= t.userData.speed; // avance vers le joueur
-      if(t.position.z < recycleZ){ scene.remove(t); traffic.splice(i,1); continue; }
-      // Near miss bonus
-      const dx = Math.abs(t.position.x - car.position.x);
-      const dz = Math.abs(t.position.z - car.position.z);
-      if(dz<2.2 && dx<0.9){ score += 50; setText('score', score); }
-      // Collision simple
-      if(dz<1.6 && dx<0.8){ crash(); }
-    }
-    // Spawn périodique
-    if(playerZ > lastSpawnZ){ lastSpawnZ = playerZ + SETTINGS.spawnZGap; spawnTraffic(playerZ + SETTINGS.spawnZGap*0.5); }
+  // ------- Options UI -------
+  function bindOptions(){
+    const map=[['opt_vmax','vmax'],['opt_accel','accel'],['opt_brake','brake'],['opt_friction','friction'],['opt_steer','steerBase'],['opt_gain','steerGainSpeed'],['opt_sense','sense']];
+    map.forEach(([id,key])=>{ const s=T(id); const v=T(id+'_v'); if(!s||!v) return; v.textContent=s.value; s.addEventListener('input',()=>{ SETTINGS[key]=parseFloat(s.value); v.textContent=s.value; }); });
+    T('closeOpt').addEventListener('click', toggleOptions);
+    T('resetOpt').addEventListener('click', ()=>{ [['opt_vmax',4.8],['opt_accel',7],['opt_brake',6],['opt_friction',4],['opt_steer',1.2],['opt_gain',12],['opt_sense',0.42]].forEach(([id,val])=>{ const s=T(id); const v=T(id+'_v'); s.value=val; v.textContent=val; }); Object.assign(SETTINGS,{vmax:4.8,accel:7,brake:6,friction:4,steerBase:1.2,steerGainSpeed:12,sense:0.42}); });
   }
-
-  // ------- Orbes (collectibles) -------
-  function spawnOrb(zBase){
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.35,16,16), new THREE.MeshLambertMaterial({color:0x11e233}));
-    orb.position.set(SETTINGS.lanes[Math.floor(Math.random()*SETTINGS.lanes.length)], 0.6, zBase + 25);
-    scene.add(orb); orbs.push(orb);
-  }
-  function updateOrbs(){
-    const playerZ = car.position.z; const recycleZ = playerZ - 10;
-    for(let i=orbs.length-1;i>=0;i--){
-      const o = orbs[i];
-      if(o.position.z < recycleZ){ scene.remove(o); orbs.splice(i,1); continue; }
-      // Pick-up
-      if(Math.abs(o.position.z - playerZ)<1.4 && Math.abs(o.position.x - car.position.x)<0.9){
-        score += 100; setText('score', score); scene.remove(o); orbs.splice(i,1);
-      }
-    }
-    if(playerZ > lastOrbZ){ lastOrbZ = playerZ + SETTINGS.orbEvery; spawnOrb(playerZ + SETTINGS.orbEvery*0.5); }
-  }
-
-  // ------- Nitro -------
-  function nitro(){ nitroActive=true; nitroTimeLeft=SETTINGS.nitroTime; }
-  function updateNitro(dt){ if(nitroActive){ nitroTimeLeft -= dt; if(nitroTimeLeft<=0){ nitroActive=false; } } }
+  function toggleOptions(){ const p=T('options'); p.style.display = (p.style.display==='none' ? 'block' : 'none'); }
 
   // ------- Joueur -------
   function resetPlayer(){ car.position.set(0,0,5); velocity.set(0,0,0); rotation=0; }
   function updatePlayer(dt){
     let thrust=0; if(keys['KeyW']||keys['ArrowUp']) thrust += SETTINGS.accel; if(keys['KeyS']||keys['ArrowDown']) thrust -= SETTINGS.brake;
-    if(nitroActive) thrust *= SETTINGS.nitroBoost;
     const sp = velocity.length();
     let steer = 0; if(sp>0.2){ if(keys['KeyA']||keys['ArrowLeft']) steer += SETTINGS.steerBase*Math.min(sp/SETTINGS.steerGainSpeed,1); if(keys['KeyD']||keys['ArrowRight']) steer -= SETTINGS.steerBase*Math.min(sp/SETTINGS.steerGainSpeed,1); }
-    rotation += steer * dt * 0.42;
+    rotation += steer * dt * SETTINGS.sense; // sensibilité globale
     velocity.x += Math.sin(rotation)*thrust*dt; velocity.z += Math.cos(rotation)*thrust*dt;
     const fr = Math.exp(-SETTINGS.friction*dt); velocity.multiplyScalar(fr);
     const vmax = SETTINGS.vmax; if(velocity.length()>vmax) velocity.setLength(vmax);
     car.position.add(velocity); car.rotation.y = rotation; distance = Math.max(distance, car.position.z);
   }
 
-  // ------- Route infinie recyclée -------
-  function updateRoad(){ const z=car.position.z, limit=z-L*4; segments.forEach(s=>{ if(s.position.z<limit) s.position.z+=N*L; }); }
+  // ------- Route recycle -------
+  function updateRoad(){ const z=car.position.z, limit=z-L*4; segments.forEach(s=>{ if(s.position.z<limit) s.position.z+=N*L; }); // recycle
+    // recycle aussi les décors: déplace en avant lorsqu’ils passent derrière
+    for(let i=0;i<props.length;i++){ const p=props[i]; if(p.position.z < z - 30){ p.position.z += N*L; }} }
 
-  // ------- Caméra -------
+  // ------- Caméra / HUD -------
   function updateCamera(){ const p=car.position, r=rotation; camera.position.lerp(new THREE.Vector3(p.x-Math.sin(r)*12, p.y+7, p.z-Math.cos(r)*12), 0.12); camera.lookAt(new THREE.Vector3(p.x, p.y+1, p.z)); }
-
-  // ------- HUD / FPS -------
-  function updateHUD(now){ setText('speed', Math.round(velocity.length()*36)); setText('distance', Math.round(Math.abs(car.position.z))); frames++; if(now-lastFPS>1000){ setText('fps', Math.round(frames*1000/(now-lastFPS))); frames=0; lastFPS=now; } setText('score', score); }
+  function updateHUD(now){ setText('speed', Math.round(velocity.length()*36)); setText('distance', Math.round(Math.abs(car.position.z))); frames++; if(now-lastFPS>1000){ setText('fps', Math.round(frames*1000/(now-lastFPS))); frames=0; lastFPS=now; } }
 
   // ------- Boucle -------
-  function loop(){
-    requestAnimationFrame(loop);
-    const now=performance.now(); if(!loop.last) loop.last=now; const dt=Math.min(0.033,(now-loop.last)/1000); loop.last=now;
-    updatePlayer(dt); updateRoad(); updateTraffic(dt); updateOrbs(); updateNitro(dt); updateCamera(); updateHUD(now);
-    renderer.render(scene,camera);
-  }
+  function loop(){ requestAnimationFrame(loop); const now=performance.now(); if(!loop.last) loop.last=now; const dt=Math.min(0.033,(now-loop.last)/1000); loop.last=now; updatePlayer(dt); updateRoad(); updateCamera(); updateHUD(now); renderer.render(scene,camera); }
 
-  // ------- Crash -------
-  function crash(){ score = Math.max(0, score - 200); setText('score', score); velocity.multiplyScalar(0.4); }
-
-  // ------- Start -------
   window.addEventListener('load', ()=>{ if(typeof THREE==='undefined'){ alert('Three.js non chargé'); return; } bootstrap(); loop(); });
   </script>
 </body>
