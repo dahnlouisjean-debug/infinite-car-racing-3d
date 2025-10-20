@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jeu de Voiture 3D Simple</title>
+    <title>Jeu de Voiture 3D - Réglages</title>
     <style>
         body { margin: 0; padding: 0; background: #000; color: white; font-family: Arial, sans-serif; overflow: hidden; }
         #info { position: absolute; top: 10px; left: 10px; z-index: 100; }
         #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; color: #00ff00; }
         #controls { position: absolute; bottom: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; }
-        #settings { position: absolute; top: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; }
-        .slider-container { margin: 5px 0; }
-        .slider-container label { display: block; font-size: 12px; margin-bottom: 3px; }
+        #settings { position: absolute; top: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; border: 2px solid #00ff41; }
+        .slider-container { margin: 8px 0; }
+        .slider-container label { display: block; font-size: 12px; margin-bottom: 5px; color: #00ff41; }
         input[type="range"] { width: 120px; }
+        button { background: #00ff41; color: black; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
         canvas { display: block; }
     </style>
 </head>
@@ -22,8 +23,8 @@
         <div>Position: X=<span id="posX">0</span> Z=<span id="posZ">0</span></div>
     </div>
     
-    <div id="settings" style="display:none;">
-        <h4 style="margin:0 0 10px 0;">⚙️ RÉGLAGES</h4>
+    <div id="settings" style="display:block;">
+        <h4 style="margin:0 0 10px 0; color: #00ff41;">⚙️ RÉGLAGES MANIABILITÉ</h4>
         
         <div class="slider-container">
             <label>Sensibilité direction: <span id="steerValue">50%</span></label>
@@ -45,7 +46,8 @@
             <input type="range" id="friction" min="10" max="90" value="50">
         </div>
         
-        <button onclick="resetSettings()" style="margin-top:10px; padding:5px;">Reset</button>
+        <button onclick="resetSettings()">Reset</button>
+        <button onclick="toggleSettings()">Masquer</button>
     </div>
     
     <div id="controls" style="display:none;">
@@ -66,34 +68,27 @@
         let rotation = 0;
         let speed = 0;
         
-        // Paramètres de maniabilité ajustables
         let settings = {
-            steerSensitivity: 0.5,  // Sensibilité direction
-            acceleration: 0.5,      // Force d'accélération
-            braking: 0.5,          // Force de freinage
-            friction: 0.5,         // Friction naturelle
-            maxSpeed: 8,           // Vitesse maximale
-            turnSpeed: 0.02        // Vitesse de rotation de base
+            steerSensitivity: 0.5,
+            acceleration: 0.5,
+            braking: 0.5,
+            friction: 0.5,
+            maxSpeed: 8,
+            turnSpeed: 0.02
         };
 
         function init() {
-            console.log('Démarrage du jeu amélioré...');
-            
-            // Scène
             scene = new THREE.Scene();
             scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
             
-            // Caméra
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 5, 10);
             
-            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setClearColor(0x87ceeb);
             document.body.appendChild(renderer.domElement);
             
-            // Lumières
             const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
             scene.add(ambientLight);
             
@@ -101,24 +96,22 @@
             directionalLight.position.set(10, 10, 5);
             scene.add(directionalLight);
             
-            // Route élargie
+            // Route
             const roadGeometry = new THREE.PlaneGeometry(25, 300);
             const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
             const road = new THREE.Mesh(roadGeometry, roadMaterial);
             road.rotation.x = -Math.PI / 2;
             scene.add(road);
             
-            // Lignes de la route
+            // Lignes
             const lineGeometry = new THREE.PlaneGeometry(0.3, 300);
             const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
             
-            // Ligne centrale
             const centerLine = new THREE.Mesh(lineGeometry, lineMaterial);
             centerLine.rotation.x = -Math.PI / 2;
             centerLine.position.y = 0.01;
             scene.add(centerLine);
             
-            // Lignes de bord
             const leftLine = centerLine.clone();
             leftLine.position.x = -10;
             scene.add(leftLine);
@@ -127,7 +120,7 @@
             rightLine.position.x = 10;
             scene.add(rightLine);
             
-            // Herbe sur les côtés
+            // Herbe
             const grassGeometry = new THREE.PlaneGeometry(50, 300);
             const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
             
@@ -143,17 +136,15 @@
             rightGrass.position.y = -0.1;
             scene.add(rightGrass);
             
-            // Voiture améliorée
+            // Voiture
             car = new THREE.Group();
             
-            // Carrosserie principale
             const bodyGeometry = new THREE.BoxGeometry(1.8, 0.8, 3.5);
             const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff2222 });
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
             body.position.y = 0.4;
             car.add(body);
             
-            // Toit
             const roofGeometry = new THREE.BoxGeometry(1.6, 0.6, 2);
             const roofMaterial = new THREE.MeshLambertMaterial({ color: 0xcc1111 });
             const roof = new THREE.Mesh(roofGeometry, roofMaterial);
@@ -161,7 +152,6 @@
             roof.position.z = -0.2;
             car.add(roof);
             
-            // Roues
             const wheelGeometry = new THREE.CylinderGeometry(0.35, 0.35, 0.2, 12);
             const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
             
@@ -186,19 +176,14 @@
             car.userData.wheels = wheels;
             scene.add(car);
             
-            // Contrôles et interface
             setupControls();
             setupUI();
             
-            // Masquer le loading
             document.getElementById('loading').style.display = 'none';
             document.getElementById('info').style.display = 'block';
             document.getElementById('controls').style.display = 'block';
-            document.getElementById('settings').style.display = 'block';
             
-            console.log('Jeu prêt avec réglages avancés!');
-            
-            // Démarrer la boucle de jeu
+            console.log('Jeu prêt ! Appuyez sur T pour masquer/afficher les réglages');
             animate();
         }
         
@@ -206,12 +191,12 @@
             document.addEventListener('keydown', (event) => {
                 keys[event.code] = true;
                 
-                // Touches spéciales
                 if (event.code === 'KeyR') {
                     resetCarPosition();
                 }
                 if (event.code === 'KeyT') {
                     toggleSettings();
+                    console.log('Touche T pressée !');
                 }
             });
             
@@ -221,7 +206,6 @@
         }
         
         function setupUI() {
-            // Gestion des sliders
             const steerSlider = document.getElementById('steerSensitivity');
             const accelSlider = document.getElementById('acceleration');
             const brakeSlider = document.getElementById('braking');
@@ -249,11 +233,9 @@
         }
         
         function updateCar() {
-            // Forces appliquées
             let forwardForce = 0;
             let steerInput = 0;
             
-            // Accélération/freinage
             if (keys['KeyW'] || keys['ArrowUp']) {
                 forwardForce = settings.acceleration * 0.15;
             }
@@ -261,7 +243,6 @@
                 forwardForce = -settings.braking * 0.1;
             }
             
-            // Direction (seulement si la voiture bouge)
             const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
             if (currentSpeed > 0.1) {
                 if (keys['KeyA'] || keys['ArrowLeft']) {
@@ -270,29 +251,22 @@
                 if (keys['KeyD'] || keys['ArrowRight']) {
                     steerInput = -settings.steerSensitivity * settings.turnSpeed;
                 }
-                
-                // La sensibilité de direction dépend de la vitesse
                 steerInput *= Math.min(currentSpeed / 2, 1);
             }
             
-            // Frein à main
             if (keys['Space']) {
                 velocity.x *= 0.85;
                 velocity.z *= 0.85;
             }
             
-            // Application des forces
             rotation += steerInput;
-            
             velocity.x += Math.sin(rotation) * forwardForce;
             velocity.z += Math.cos(rotation) * forwardForce;
             
-            // Friction naturelle ajustable
             const frictionFactor = 1 - (settings.friction * 0.04);
             velocity.x *= frictionFactor;
             velocity.z *= frictionFactor;
             
-            // Limitation de vitesse
             const maxVel = settings.maxSpeed * 0.1;
             const currentVel = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
             if (currentVel > maxVel) {
@@ -300,21 +274,18 @@
                 velocity.z = (velocity.z / currentVel) * maxVel;
             }
             
-            // Mise à jour position voiture
             car.position.x += velocity.x;
             car.position.z += velocity.z;
             car.rotation.y = rotation;
             
-            // Animation des roues
             const wheelSpeed = currentSpeed * 0.5;
             car.userData.wheels.forEach((wheel) => {
                 if (wheel.userData.name.includes('front')) {
-                    wheel.rotation.y = steerInput * 0.5; // Roues avant tournent
+                    wheel.rotation.y = steerInput * 0.5;
                 }
-                wheel.rotation.x += wheelSpeed; // Toutes les roues roulent
+                wheel.rotation.x += wheelSpeed;
             });
             
-            // Caméra suit la voiture
             const idealCameraPosition = new THREE.Vector3(
                 car.position.x - Math.sin(rotation) * 10,
                 car.position.y + 6,
@@ -324,10 +295,7 @@
             camera.position.lerp(idealCameraPosition, 0.08);
             camera.lookAt(new THREE.Vector3(car.position.x, car.position.y + 1, car.position.z));
             
-            // Calcul vitesse pour affichage
-            speed = currentSpeed * 50; // Conversion pour km/h approximatif
-            
-            // Mise à jour interface
+            speed = currentSpeed * 50;
             updateUI();
         }
         
@@ -344,6 +312,7 @@
             velocity.z = 0;
             rotation = 0;
             speed = 0;
+            console.log('Position voiture réinitialisée');
         }
         
         function resetSettings() {
@@ -361,11 +330,19 @@
             document.getElementById('accelValue').textContent = '50%';
             document.getElementById('brakeValue').textContent = '50%';
             document.getElementById('frictionValue').textContent = '50%';
+            
+            console.log('Réglages réinitialisés');
         }
         
         function toggleSettings() {
-            const settings = document.getElementById('settings');
-            settings.style.display = settings.style.display === 'none' ? 'block' : 'none';
+            const settingsPanel = document.getElementById('settings');
+            if (settingsPanel.style.display === 'none') {
+                settingsPanel.style.display = 'block';
+                console.log('Panneau réglages affiché');
+            } else {
+                settingsPanel.style.display = 'none';
+                console.log('Panneau réglages masqué');
+            }
         }
         
         function animate() {
@@ -374,14 +351,12 @@
             renderer.render(scene, camera);
         }
         
-        // Responsive
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Démarrage
         window.addEventListener('load', () => {
             if (typeof THREE !== 'undefined') {
                 init();
