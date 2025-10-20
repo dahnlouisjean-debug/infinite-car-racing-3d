@@ -1,79 +1,80 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Car Racing 3D</title>
-    <link rel="icon" href="data:,">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: #0e1225; overflow: hidden; user-select: none; }
-        #gameContainer { position: relative; width: 100vw; height: 100vh; }
-        #gameCanvas { display: block; }
-        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: #00ff41; font-size: 18px; text-shadow: 0 0 10px #00ff41; }
-        #controls { position: absolute; bottom: 20px; right: 20px; z-index: 100; color: #00ff41; font-size: 14px; text-align: right; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border: 1px solid #00ff41; }
-        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ff41; font-size: 20px; z-index: 200; text-align: center; }
-        #errorMessage { position: absolute; top: 65%; left: 50%; transform: translate(-50%, -50%); color: #ff4444; font-size: 14px; z-index: 200; text-align: center; background: rgba(0,0,0,0.8); padding: 16px; border-radius: 8px; border: 1px solid #ff4444; max-width: 80%; }
-        .hidden { display: none; }
-        #loadingProgress { margin-top: 8px; font-size: 13px; color: #9ad3a5; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinite Car Racing 3D</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0e1225;color:#00ff41;font-family:Arial,Helvetica,sans-serif}
+    #game{position:relative;width:100vw;height:100vh}
+    #hud{position:absolute;top:16px;left:16px;z-index:10}
+    #hud .card{background:rgba(0,0,0,.6);border:1px solid #00ff41;border-radius:8px;padding:10px;margin-bottom:8px}
+    #controls{position:absolute;bottom:16px;right:16px;z-index:10;background:rgba(0,0,0,.6);border:1px solid #00ff41;border-radius:8px;padding:10px}
+    canvas{display:block}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+  <script type="module">
+    import { Input } from './src/engine/input.js';
+    import { initAll, updateAll } from './src/engine/registry.js';
+    import './src/ui/hud.js';
+    import './src/game/road.js';
+    import './src/game/car.js';
+
+    const ctx = {};
+
+    const canvas = document.createElement('canvas');
+    document.getElementById('game').appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x87CEEB,1);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x87CEEB, 60, 800);
+    const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1500);
+    camera.position.set(0,9,14);
+
+    scene.add(new THREE.AmbientLight(0x404040, 1.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(20,30,10); scene.add(sun);
+
+    ctx.scene = scene; ctx.camera = camera; ctx.renderer = renderer;
+    ctx.input = new Input(); ctx.input.init();
+
+    initAll(ctx);
+
+    const ui = document.getElementById('ui'); ui.style.display='block';
+
+    let last = performance.now();
+    function loop(){
+      requestAnimationFrame(loop);
+      const now = performance.now();
+      const dt = Math.min(0.033, (now-last)/1000); last = now;
+
+      updateAll(ctx, dt);
+
+      if (ctx.player){
+        const p = ctx.player.mesh.position; const r = ctx.player.rot;
+        const target = new THREE.Vector3(p.x - Math.sin(r)*12, p.y + 7, p.z - Math.cos(r)*12);
+        camera.position.lerp(target, 0.12);
+        camera.lookAt(new THREE.Vector3(p.x, p.y+1, p.z));
+      }
+
+      renderer.render(scene, camera);
+    }
+    loop();
+
+    addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+  </script>
 </head>
 <body>
-<div id="gameContainer">
-    <canvas id="gameCanvas"></canvas>
-
-    <div id="loading">
-        INITIALISATION DU MOTEUR...<br>
-        <div id="loadingProgress">Téléchargement des bibliothèques...</div>
+  <div id="game"></div>
+  <div id="ui" style="display:none">
+    <div id="hud">
+      <div class="card">Vitesse: <span id="speed">0</span> km/h</div>
+      <div class="card">Distance: <span id="distance">0</span> m</div>
+      <div class="card">FPS: <span id="fps">60</span></div>
     </div>
-
-    <div id="errorMessage" class="hidden">
-        <strong>ERREUR</strong><br>
-        <span id="errorText"></span>
+    <div id="controls" class="card">
+      W/S/↑/↓ Accélérer/Freiner — A/D/←/→ Tourner — R Reset — P Pause
     </div>
-
-    <div id="ui" class="hidden">
-        <div>VITESSE: <span id="speed">0</span> km/h</div>
-        <div>DISTANCE: <span id="distance">0</span> m</div>
-        <div>FPS: <span id="fps">60</span></div>
-    </div>
-
-    <div id="controls" class="hidden">
-        <div><strong>CONTROLES</strong></div>
-        <div>↑/W - Accélération</div>
-        <div>↓/S - Frein/Marche arrière</div>
-        <div>←/A - Gauche</div>
-        <div>→/D - Droite</div>
-        <div>ESPACE - Frein à main</div>
-        <div>R - Reset voiture</div>
-        <div>P - Pause</div>
-    </div>
-</div>
-
-<!-- Bibliothèques: lock versions et CDN robustes -->
-<script>
-  // Empêche le cache agressif pendant le debug
-  const nocache = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
-</script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script>
-  if (typeof THREE === 'undefined') {
-    document.getElementById('errorText').textContent = 'Échec chargement Three.js';
-    document.getElementById('errorMessage').classList.remove('hidden');
-  } else {
-    document.getElementById('loadingProgress').textContent = 'Three.js OK. Chargement Cannon.js...';
-  }
-</script>
-<!-- Utiliser cannon-es UMD compat: @pmndrs/cannon-es fournit un build UMD via skypack -->
-<script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
-<script>
-  if (typeof CANNON === 'undefined') {
-    document.getElementById('errorText').textContent = 'Échec chargement Cannon.js';
-    document.getElementById('errorMessage').classList.remove('hidden');
-  } else {
-    document.getElementById('loadingProgress').textContent = 'Librairies chargées. Démarrage du jeu...';
-  }
-</script>
-<script src="src/main.js"></script>
+  </div>
 </body>
 </html>
