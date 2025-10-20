@@ -1,194 +1,87 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Infinite Car Racing 3D</title>
-  <style>
-    html,body{margin:0;height:100%;background:#0e1225;color:#00ff41;font-family:Arial,Helvetica,sans-serif}
-    #hud{position:absolute;top:16px;left:16px;z-index:10}
-    #hud .card{background:rgba(0,0,0,.6);border:1px solid #00ff41;border-radius:8px;padding:10px;margin-bottom:8px}
-    #controls{position:absolute;bottom:16px;right:16px;z-index:10;background:rgba(0,0,0,.6);border:1px solid #00ff41;border-radius:8px;padding:10px}
-    #game{position:relative;width:100vw;height:100vh}
-    canvas{display:block}
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+    <meta charset="UTF-8" />
+    <title>Infinite Car Racing 3D</title>
+    <style>
+        html,body{margin:0;padding:0;background:#7CC0EF}
+        #hud{position:absolute;top:16px;left:16px;z-index:10}
+        #hud .card{background:rgba(0,0,0,.7);border:1px solid #11e233;color:#11e233;border-radius:8px;padding:12px 22px;margin-bottom:10px;font-size:24px;}
+        #controls{position:absolute;bottom:16px;right:16px;z-index:10;background:rgba(0,0,0,.7);border:1px solid #11e233;border-radius:8px;padding:10px;color:#11e233;}
+        canvas{display:block;}
+    </style>
 </head>
 <body>
-  <div id="game"></div>
-  <div id="hud">
-    <div class="card">Vitesse: <span id="speed">0</span> km/h</div>
-    <div class="card">Distance: <span id="distance">0</span> m</div>
-    <div class="card">FPS: <span id="fps">60</span></div>
-  </div>
-  <div id="controls" class="card">
-    W/S/↑/↓ Accélérer/Freiner — A/D/←/→ Tourner — R Reset
-  </div>
-
-  <script>
-    // ====== Paramètres maniabilité réglables ======
-    const SETTINGS = {
-      steerSensitivity: 0.35,   // sensibilité direction (0.1 à 0.8)
-      acceleration: 7.0,        // force d'accélération
-      braking: 6.0,             // force de freinage
-      friction: 3.0,            // friction naturelle
-      maxSpeedKmh: 130,         // vitesse max approx
-      turnScale: 1.6            // facteur de rotation de base
-    };
-
-    // ====== Variables globales ======
-    let scene, camera, renderer, car;
-    let keys = {};
-    let velocity = new THREE.Vector3();
-    let rotation = 0;
-    let segments = [];
-    const segmentLen = 40, poolSize = 20;
-
-    // ====== Initialisation ======
-    function init(){
-      // Scene
-      scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x87CEEB, 60, 800);
-
-      // Camera
-      camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1500);
-      camera.position.set(0, 9, 14);
-
-      // Renderer
-      const canvas = document.createElement('canvas');
-      document.getElementById('game').appendChild(canvas);
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.setClearColor(0x87CEEB, 1);
-
-      // Lights
-      scene.add(new THREE.AmbientLight(0x404040, 1.2));
-      const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-      sun.position.set(20, 30, 10); scene.add(sun);
-
-      // Route infinie (pool)
-      for (let i=0;i<poolSize;i++){
-        const seg = createSegment(i*segmentLen);
-        scene.add(seg.group);
-        segments.push(seg);
-      }
-
-      // Voiture (arcade)
-      car = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(1.8,0.8,3.6), new THREE.MeshLambertMaterial({color:0xff3030}));
-      body.position.y = 0.4; car.add(body);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,1.8), new THREE.MeshLambertMaterial({color:0xcc2020}));
-      roof.position.set(0,0.95,-0.2); car.add(roof);
-      // roues
-      const wheelGeo = new THREE.CylinderGeometry(0.35,0.35,0.25,12);
-      const wheelMat = new THREE.MeshLambertMaterial({color:0x222222});
-      [[-1,0.35,1.2],[1,0.35,1.2],[-1,0.35,-1.2],[1,0.35,-1.2]].forEach(p=>{const w=new THREE.Mesh(wheelGeo,wheelMat);w.rotation.z=Math.PI/2;w.position.set(...p);car.add(w)});
-      scene.add(car);
-
-      // Inputs
-      addEventListener('keydown', e=> keys[e.code]=true);
-      addEventListener('keyup', e=> keys[e.code]=false);
-
-      // Loop
-      let last = performance.now();
-      function loop(){
-        requestAnimationFrame(loop);
-        const now = performance.now();
-        const dt = Math.min(0.033, (now-last)/1000); last = now;
-
-        updateCar(dt);
-        updateRoad();
-        updateCamera();
-        updateHUD();
-
-        renderer.render(scene, camera);
-      }
-      loop();
-
-      // Resize
-      addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
-    }
-
-    // ====== Création d'un segment ======
-    function createSegment(z){
-      const group = new THREE.Group();
-      const road = new THREE.Mesh(new THREE.PlaneGeometry(20, segmentLen), new THREE.MeshLambertMaterial({color:0x3a3a3a}));
-      road.rotation.x = -Math.PI/2; road.position.z = z; group.add(road);
-      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.4, segmentLen), new THREE.MeshBasicMaterial({color:0xffffff}));
-      line.rotation.x = -Math.PI/2; line.position.set(0,0.01,z); group.add(line);
-      const grassGeo = new THREE.PlaneGeometry(30, segmentLen);
-      const grassMat = new THREE.MeshLambertMaterial({color:0x227722});
-      const grassL = new THREE.Mesh(grassGeo, grassMat); grassL.rotation.x=-Math.PI/2; grassL.position.set(-25,-0.05,z); group.add(grassL);
-      const grassR = new THREE.Mesh(grassGeo, grassMat); grassR.rotation.x=-Math.PI/2; grassR.position.set(25,-0.05,z); group.add(grassR);
-      return { group };
-    }
-
-    // ====== Mise à jour voiture ======
-    function updateCar(dt){
-      let thrust = 0;
-      if (keys['KeyW']||keys['ArrowUp']) thrust += SETTINGS.acceleration;
-      if (keys['KeyS']||keys['ArrowDown']) thrust -= SETTINGS.braking;
-
-      // Direction proportionnelle à la vitesse
-      const speed = velocity.length();
-      let steer = 0;
-      if (speed > 0.25){
-        if (keys['KeyA']||keys['ArrowLeft']) steer += SETTINGS.turnScale * Math.min(speed/15,1);
-        if (keys['KeyD']||keys['ArrowRight']) steer -= SETTINGS.turnScale * Math.min(speed/15,1);
-      }
-      rotation += steer * dt * SETTINGS.steerSensitivity;
-
-      // Intégration
-      const forward = new THREE.Vector3(Math.sin(rotation),0,Math.cos(rotation));
-      velocity.addScaledVector(forward, thrust*dt);
-
-      // Friction
-      const fr = Math.exp(-SETTINGS.friction*dt);
-      velocity.multiplyScalar(fr);
-
-      // Clamp vitesse
-      const max = (SETTINGS.maxSpeedKmh/3.6) / 10; // échelle de notre monde
-      if (velocity.length() > max) velocity.setLength(max);
-
-      // Déplacement/rotation
-      car.position.add(velocity);
-      car.rotation.y = rotation;
-    }
-
-    // ====== Recyclage segments ======
-    function updateRoad(){
-      const carZ = car.position.z;
-      const limit = carZ - segmentLen*5;
-      segments.forEach(seg => {
-        if (seg.group.position.z < limit){
-          seg.group.position.z += poolSize * segmentLen;
+    <div id="hud">
+        <div class="card">Vitesse: <span id="speed">0</span> km/h</div>
+        <div class="card">Distance: <span id="distance">0</span> m</div>
+        <div class="card">FPS: <span id="fps">60</span></div>
+    </div>
+    <div id="controls" class="card">
+        W/S/↑/↓ Accélérer/Freiner — A/D/←/→ Tourner — R Reset
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, car, keys = {}, velocity = {x:0,z:0}, rotation = 0, speed = 0;
+        let segments = [], segmentLen = 40, poolSize = 18;
+        function init(){
+          scene = new THREE.Scene();
+          scene.fog = new THREE.Fog(0x87CEEB, 60, 700);
+          camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1500);
+          camera.position.set(0,9,14); camera.lookAt(0,0,50);
+          renderer = new THREE.WebGLRenderer({ antialias: true });
+          renderer.setSize(innerWidth, innerHeight);
+          renderer.setClearColor(0x87CEEB, 1);
+          document.body.appendChild(renderer.domElement);
+          scene.add(new THREE.AmbientLight(0x404040, 2));
+          const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(20,30,10); scene.add(sun);
+          for(let i=0;i<poolSize;i++){
+            const seg = new THREE.Mesh(new THREE.PlaneGeometry(18, segmentLen), new THREE.MeshLambertMaterial({color:0x454545}));
+            seg.rotation.x = -Math.PI/2; seg.position.z = i * segmentLen; scene.add(seg); segments.push(seg);
+            const line = new THREE.Mesh(new THREE.PlaneGeometry(0.5, segmentLen-2), new THREE.MeshBasicMaterial({color:0xffffff}));
+            line.rotation.x = -Math.PI/2; line.position.z = i*segmentLen; line.position.y=0.01; scene.add(line);
+          }
+          for(let i=0;i<poolSize;i++){
+            [-1, 1].forEach(side=>{
+              const grass = new THREE.Mesh(new THREE.PlaneGeometry(32, segmentLen), new THREE.MeshLambertMaterial({color:0x2ccf3e}));
+              grass.rotation.x=-Math.PI/2; grass.position.set(side*25,-0.1,i*segmentLen); scene.add(grass);
+            });
+          }
+          car = new THREE.Group();
+          const body = new THREE.Mesh(new THREE.BoxGeometry(2,1,3.8), new THREE.MeshLambertMaterial({color:0xff3838}));
+          body.position.y = 0.5; car.add(body);
+          const roof = new THREE.Mesh(new THREE.BoxGeometry(1.5,0.7,2),new THREE.MeshLambertMaterial({color:0xdd1b1b}));
+          roof.position.set(0,1,0); car.add(roof);
+          const wheelGeo = new THREE.CylinderGeometry(0.38,0.38,0.22,12);
+          const wheelMat = new THREE.MeshLambertMaterial({color:0x222222});
+          [[-1,0.28,1.2], [1,0.28,1.2], [-1,0.28,-1.25], [1,0.28,-1.25]].forEach(p=>{const w=new THREE.Mesh(wheelGeo,wheelMat);w.rotation.z=Math.PI/2;w.position.set(...p);car.add(w);});
+          car.position.set(0,0,5); scene.add(car);
+          addEventListener('keydown', e=>{keys[e.code]=true;if(e.code==='KeyR'){car.position.set(0,0,5);velocity.x=0;velocity.z=0;rotation=0;}});
+          addEventListener('keyup', e=> keys[e.code]=false);
+          let last=performance.now(), frameCount=0, lastFPS=performance.now();
+          function loop(){
+            requestAnimationFrame(loop);
+            const now=performance.now(),dt=Math.min(0.033,(now-last)/1000); last=now;
+            let thrust=0; if(keys['KeyW']||keys['ArrowUp']) thrust+=10; if(keys['KeyS']||keys['ArrowDown']) thrust-=8;
+            const currentSpeed=Math.sqrt(velocity.x*velocity.x + velocity.z*velocity.z);
+            let steer=0; if(currentSpeed>0.2){ if(keys['KeyA']||keys['ArrowLeft']) steer+=1.4*Math.min(currentSpeed/12,1); if(keys['KeyD']||keys['ArrowRight']) steer-=1.4*Math.min(currentSpeed/12,1); }
+            rotation+=steer*dt*0.42;
+            velocity.x+=Math.sin(rotation)*thrust*dt;
+            velocity.z+=Math.cos(rotation)*thrust*dt;
+            const friction=Math.exp(-3.3*dt); velocity.x*=friction; velocity.z*=friction;
+            const vmax=5.5; const vel=Math.sqrt(velocity.x*velocity.x+velocity.z*velocity.z); if(vel>vmax){velocity.x=(velocity.x/vel)*vmax; velocity.z=(velocity.z/vel)*vmax;}
+            car.position.x+=velocity.x; car.position.z+=velocity.z; car.rotation.y=rotation;
+            const carZ=car.position.z, limit=carZ-segmentLen*4; segments.forEach(seg=>{if(seg.position.z<limit){seg.position.z+=poolSize*segmentLen;}});
+            const p=car.position, r=rotation; camera.position.lerp(new THREE.Vector3(p.x-Math.sin(r)*13, p.y+7, p.z-Math.cos(r)*13), 0.15); camera.lookAt(new THREE.Vector3(p.x,p.y+1,p.z));
+            document.getElementById('speed').textContent=Math.round(Math.sqrt(velocity.x*velocity.x+velocity.z*velocity.z)*37);
+            document.getElementById('distance').textContent=Math.round(Math.abs(car.position.z));
+            frameCount++; if(now-lastFPS>1000){ document.getElementById('fps').textContent=Math.round(frameCount*1000/(now-lastFPS)); frameCount=0; lastFPS=now; }
+            renderer.render(scene,camera);
+          }
+          loop();
         }
-      });
-    }
-
-    // ====== Caméra ======
-    function updateCamera(){
-      const p = car.position; const r = rotation;
-      const target = new THREE.Vector3(p.x - Math.sin(r)*12, p.y + 7, p.z - Math.cos(r)*12);
-      camera.position.lerp(target, 0.12);
-      camera.lookAt(new THREE.Vector3(p.x, p.y+1, p.z));
-    }
-
-    // ====== HUD ======
-    let frames=0, last=performance.now();
-    function updateHUD(){
-      // vitesse
-      const kmh = Math.round(velocity.length()*36);
-      document.getElementById('speed').textContent = kmh;
-      document.getElementById('distance').textContent = Math.round(Math.abs(car.position.z));
-      frames++; const now = performance.now();
-      if (now-last>1000){ document.getElementById('fps').textContent = Math.round(frames*1000/(now-last)); frames=0; last=now; }
-    }
-
-    // ====== Start ======
-    window.addEventListener('load', ()=>{
-      if (typeof THREE!=='undefined') init();
-    });
-  </script>
+        window.addEventListener('load', ()=>{ if(typeof THREE!=='undefined'){ init(); } else { alert('Three.js non chargé'); } });
+        addEventListener('resize', ()=>{ if(camera&&renderer){ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); } });
+    </script>
 </body>
 </html>
