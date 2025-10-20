@@ -3,49 +3,81 @@
 <head>
     <title>Jeu de Voiture 3D Simple</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #000;
-            color: white;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 100;
-        }
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 24px;
-            color: #00ff00;
-        }
-        canvas {
-            display: block;
-        }
+        body { margin: 0; padding: 0; background: #000; color: white; font-family: Arial, sans-serif; overflow: hidden; }
+        #info { position: absolute; top: 10px; left: 10px; z-index: 100; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; color: #00ff00; }
+        #controls { position: absolute; bottom: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; }
+        #settings { position: absolute; top: 10px; right: 10px; z-index: 100; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; }
+        .slider-container { margin: 5px 0; }
+        .slider-container label { display: block; font-size: 12px; margin-bottom: 3px; }
+        input[type="range"] { width: 120px; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
     <div id="loading">Chargement...</div>
+    
     <div id="info" style="display:none;">
         <div>Vitesse: <span id="speed">0</span> km/h</div>
-        <div>Contrôles: WASD ou flèches</div>
+        <div>Position: X=<span id="posX">0</span> Z=<span id="posZ">0</span></div>
+    </div>
+    
+    <div id="settings" style="display:none;">
+        <h4 style="margin:0 0 10px 0;">⚙️ RÉGLAGES</h4>
+        
+        <div class="slider-container">
+            <label>Sensibilité direction: <span id="steerValue">50%</span></label>
+            <input type="range" id="steerSensitivity" min="10" max="100" value="50">
+        </div>
+        
+        <div class="slider-container">
+            <label>Accélération: <span id="accelValue">50%</span></label>
+            <input type="range" id="acceleration" min="10" max="100" value="50">
+        </div>
+        
+        <div class="slider-container">
+            <label>Freinage: <span id="brakeValue">50%</span></label>
+            <input type="range" id="braking" min="10" max="100" value="50">
+        </div>
+        
+        <div class="slider-container">
+            <label>Friction: <span id="frictionValue">50%</span></label>
+            <input type="range" id="friction" min="10" max="90" value="50">
+        </div>
+        
+        <button onclick="resetSettings()" style="margin-top:10px; padding:5px;">Reset</button>
+    </div>
+    
+    <div id="controls" style="display:none;">
+        <div><strong>CONTRÔLES :</strong></div>
+        <div>W/↑ - Accélérer</div>
+        <div>S/↓ - Freiner/Reculer</div>
+        <div>A/← - Tourner gauche</div>
+        <div>D/→ - Tourner droite</div>
+        <div>ESPACE - Frein à main</div>
+        <div>R - Reset position</div>
+        <div>T - Afficher/masquer réglages</div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Variables globales
         let scene, camera, renderer, car, keys = {};
+        let velocity = { x: 0, z: 0 };
+        let rotation = 0;
         let speed = 0;
+        
+        // Paramètres de maniabilité ajustables
+        let settings = {
+            steerSensitivity: 0.5,  // Sensibilité direction
+            acceleration: 0.5,      // Force d'accélération
+            braking: 0.5,          // Force de freinage
+            friction: 0.5,         // Friction naturelle
+            maxSpeed: 8,           // Vitesse maximale
+            turnSpeed: 0.02        // Vitesse de rotation de base
+        };
 
-        // Initialisation
         function init() {
-            console.log('Démarrage du jeu...');
+            console.log('Démarrage du jeu amélioré...');
             
             // Scène
             scene = new THREE.Scene();
@@ -69,57 +101,118 @@
             directionalLight.position.set(10, 10, 5);
             scene.add(directionalLight);
             
-            // Route
-            const roadGeometry = new THREE.PlaneGeometry(20, 200);
+            // Route élargie
+            const roadGeometry = new THREE.PlaneGeometry(25, 300);
             const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
             const road = new THREE.Mesh(roadGeometry, roadMaterial);
             road.rotation.x = -Math.PI / 2;
             scene.add(road);
             
-            // Ligne blanche
-            const lineGeometry = new THREE.PlaneGeometry(0.5, 200);
+            // Lignes de la route
+            const lineGeometry = new THREE.PlaneGeometry(0.3, 300);
             const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            const line = new THREE.Mesh(lineGeometry, lineMaterial);
-            line.rotation.x = -Math.PI / 2;
-            line.position.y = 0.01;
-            scene.add(line);
             
-            // Voiture (simple cube rouge)
-            const carGeometry = new THREE.BoxGeometry(2, 1, 4);
-            const carMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-            car = new THREE.Mesh(carGeometry, carMaterial);
-            car.position.y = 0.5;
-            scene.add(car);
+            // Ligne centrale
+            const centerLine = new THREE.Mesh(lineGeometry, lineMaterial);
+            centerLine.rotation.x = -Math.PI / 2;
+            centerLine.position.y = 0.01;
+            scene.add(centerLine);
+            
+            // Lignes de bord
+            const leftLine = centerLine.clone();
+            leftLine.position.x = -10;
+            scene.add(leftLine);
+            
+            const rightLine = centerLine.clone();
+            rightLine.position.x = 10;
+            scene.add(rightLine);
+            
+            // Herbe sur les côtés
+            const grassGeometry = new THREE.PlaneGeometry(50, 300);
+            const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            
+            const leftGrass = new THREE.Mesh(grassGeometry, grassMaterial);
+            leftGrass.rotation.x = -Math.PI / 2;
+            leftGrass.position.x = -37.5;
+            leftGrass.position.y = -0.1;
+            scene.add(leftGrass);
+            
+            const rightGrass = new THREE.Mesh(grassGeometry, grassMaterial);
+            rightGrass.rotation.x = -Math.PI / 2;
+            rightGrass.position.x = 37.5;
+            rightGrass.position.y = -0.1;
+            scene.add(rightGrass);
+            
+            // Voiture améliorée
+            car = new THREE.Group();
+            
+            // Carrosserie principale
+            const bodyGeometry = new THREE.BoxGeometry(1.8, 0.8, 3.5);
+            const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xff2222 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.4;
+            car.add(body);
+            
+            // Toit
+            const roofGeometry = new THREE.BoxGeometry(1.6, 0.6, 2);
+            const roofMaterial = new THREE.MeshLambertMaterial({ color: 0xcc1111 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 0.9;
+            roof.position.z = -0.2;
+            car.add(roof);
             
             // Roues
-            const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 8);
+            const wheelGeometry = new THREE.CylinderGeometry(0.35, 0.35, 0.2, 12);
             const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
             
-            for (let i = 0; i < 4; i++) {
+            const wheels = [];
+            const wheelPositions = [
+                { x: -1, y: 0.35, z: 1.2, name: 'frontLeft' },
+                { x: 1, y: 0.35, z: 1.2, name: 'frontRight' },
+                { x: -1, y: 0.35, z: -1.2, name: 'backLeft' },
+                { x: 1, y: 0.35, z: -1.2, name: 'backRight' }
+            ];
+            
+            wheelPositions.forEach((pos) => {
                 const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.position.set(pos.x, pos.y, pos.z);
                 wheel.rotation.z = Math.PI / 2;
-                const x = i < 2 ? -0.8 : 0.8;
-                const z = i % 2 === 0 ? 1.5 : -1.5;
-                wheel.position.set(x, 0.4, z);
+                wheel.userData.name = pos.name;
                 car.add(wheel);
-            }
+                wheels.push(wheel);
+            });
             
-            // Contrôles
+            car.position.y = 0;
+            car.userData.wheels = wheels;
+            scene.add(car);
+            
+            // Contrôles et interface
             setupControls();
+            setupUI();
             
-            // Cacher le loading
+            // Masquer le loading
             document.getElementById('loading').style.display = 'none';
             document.getElementById('info').style.display = 'block';
+            document.getElementById('controls').style.display = 'block';
+            document.getElementById('settings').style.display = 'block';
             
-            console.log('Jeu prêt !');
+            console.log('Jeu prêt avec réglages avancés!');
             
-            // Boucle de jeu
+            // Démarrer la boucle de jeu
             animate();
         }
         
         function setupControls() {
             document.addEventListener('keydown', (event) => {
                 keys[event.code] = true;
+                
+                // Touches spéciales
+                if (event.code === 'KeyR') {
+                    resetCarPosition();
+                }
+                if (event.code === 'KeyT') {
+                    toggleSettings();
+                }
             });
             
             document.addEventListener('keyup', (event) => {
@@ -127,50 +220,156 @@
             });
         }
         
+        function setupUI() {
+            // Gestion des sliders
+            const steerSlider = document.getElementById('steerSensitivity');
+            const accelSlider = document.getElementById('acceleration');
+            const brakeSlider = document.getElementById('braking');
+            const frictionSlider = document.getElementById('friction');
+            
+            steerSlider.addEventListener('input', (e) => {
+                settings.steerSensitivity = e.target.value / 100;
+                document.getElementById('steerValue').textContent = e.target.value + '%';
+            });
+            
+            accelSlider.addEventListener('input', (e) => {
+                settings.acceleration = e.target.value / 100;
+                document.getElementById('accelValue').textContent = e.target.value + '%';
+            });
+            
+            brakeSlider.addEventListener('input', (e) => {
+                settings.braking = e.target.value / 100;
+                document.getElementById('brakeValue').textContent = e.target.value + '%';
+            });
+            
+            frictionSlider.addEventListener('input', (e) => {
+                settings.friction = e.target.value / 100;
+                document.getElementById('frictionValue').textContent = e.target.value + '%';
+            });
+        }
+        
         function updateCar() {
-            // Accélération
+            // Forces appliquées
+            let forwardForce = 0;
+            let steerInput = 0;
+            
+            // Accélération/freinage
             if (keys['KeyW'] || keys['ArrowUp']) {
-                speed += 0.1;
+                forwardForce = settings.acceleration * 0.15;
             }
             if (keys['KeyS'] || keys['ArrowDown']) {
-                speed -= 0.1;
+                forwardForce = -settings.braking * 0.1;
             }
             
-            // Direction
-            if (keys['KeyA'] || keys['ArrowLeft']) {
-                car.rotation.y += 0.02 * Math.abs(speed);
+            // Direction (seulement si la voiture bouge)
+            const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            if (currentSpeed > 0.1) {
+                if (keys['KeyA'] || keys['ArrowLeft']) {
+                    steerInput = settings.steerSensitivity * settings.turnSpeed;
+                }
+                if (keys['KeyD'] || keys['ArrowRight']) {
+                    steerInput = -settings.steerSensitivity * settings.turnSpeed;
+                }
+                
+                // La sensibilité de direction dépend de la vitesse
+                steerInput *= Math.min(currentSpeed / 2, 1);
             }
-            if (keys['KeyD'] || keys['ArrowRight']) {
-                car.rotation.y -= 0.02 * Math.abs(speed);
+            
+            // Frein à main
+            if (keys['Space']) {
+                velocity.x *= 0.85;
+                velocity.z *= 0.85;
             }
             
-            // Friction
-            speed *= 0.98;
+            // Application des forces
+            rotation += steerInput;
             
-            // Limites
-            speed = Math.max(-2, Math.min(speed, 5));
+            velocity.x += Math.sin(rotation) * forwardForce;
+            velocity.z += Math.cos(rotation) * forwardForce;
             
-            // Déplacement
-            car.position.x += Math.sin(car.rotation.y) * speed * 0.1;
-            car.position.z += Math.cos(car.rotation.y) * speed * 0.1;
+            // Friction naturelle ajustable
+            const frictionFactor = 1 - (settings.friction * 0.04);
+            velocity.x *= frictionFactor;
+            velocity.z *= frictionFactor;
+            
+            // Limitation de vitesse
+            const maxVel = settings.maxSpeed * 0.1;
+            const currentVel = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            if (currentVel > maxVel) {
+                velocity.x = (velocity.x / currentVel) * maxVel;
+                velocity.z = (velocity.z / currentVel) * maxVel;
+            }
+            
+            // Mise à jour position voiture
+            car.position.x += velocity.x;
+            car.position.z += velocity.z;
+            car.rotation.y = rotation;
+            
+            // Animation des roues
+            const wheelSpeed = currentSpeed * 0.5;
+            car.userData.wheels.forEach((wheel) => {
+                if (wheel.userData.name.includes('front')) {
+                    wheel.rotation.y = steerInput * 0.5; // Roues avant tournent
+                }
+                wheel.rotation.x += wheelSpeed; // Toutes les roues roulent
+            });
             
             // Caméra suit la voiture
             const idealCameraPosition = new THREE.Vector3(
-                car.position.x - Math.sin(car.rotation.y) * 8,
-                car.position.y + 4,
-                car.position.z - Math.cos(car.rotation.y) * 8
+                car.position.x - Math.sin(rotation) * 10,
+                car.position.y + 6,
+                car.position.z - Math.cos(rotation) * 10
             );
             
-            camera.position.lerp(idealCameraPosition, 0.1);
-            camera.lookAt(car.position);
+            camera.position.lerp(idealCameraPosition, 0.08);
+            camera.lookAt(new THREE.Vector3(car.position.x, car.position.y + 1, car.position.z));
             
-            // Mise à jour UI
-            document.getElementById('speed').textContent = Math.round(Math.abs(speed * 20));
+            // Calcul vitesse pour affichage
+            speed = currentSpeed * 50; // Conversion pour km/h approximatif
+            
+            // Mise à jour interface
+            updateUI();
+        }
+        
+        function updateUI() {
+            document.getElementById('speed').textContent = Math.round(speed);
+            document.getElementById('posX').textContent = Math.round(car.position.x * 10) / 10;
+            document.getElementById('posZ').textContent = Math.round(car.position.z * 10) / 10;
+        }
+        
+        function resetCarPosition() {
+            car.position.set(0, 0, 0);
+            car.rotation.y = 0;
+            velocity.x = 0;
+            velocity.z = 0;
+            rotation = 0;
+            speed = 0;
+        }
+        
+        function resetSettings() {
+            document.getElementById('steerSensitivity').value = 50;
+            document.getElementById('acceleration').value = 50;
+            document.getElementById('braking').value = 50;
+            document.getElementById('friction').value = 50;
+            
+            settings.steerSensitivity = 0.5;
+            settings.acceleration = 0.5;
+            settings.braking = 0.5;
+            settings.friction = 0.5;
+            
+            document.getElementById('steerValue').textContent = '50%';
+            document.getElementById('accelValue').textContent = '50%';
+            document.getElementById('brakeValue').textContent = '50%';
+            document.getElementById('frictionValue').textContent = '50%';
+        }
+        
+        function toggleSettings() {
+            const settings = document.getElementById('settings');
+            settings.style.display = settings.style.display === 'none' ? 'block' : 'none';
         }
         
         function animate() {
             requestAnimationFrame(animate);
-            
             updateCar();
             renderer.render(scene, camera);
         }
@@ -182,7 +381,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Démarrage quand Three.js est chargé
+        // Démarrage
         window.addEventListener('load', () => {
             if (typeof THREE !== 'undefined') {
                 init();
