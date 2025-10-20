@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Infinite Car Racing 3D</title>
+    <link rel="icon" href="data:,">
     <style>
         * {
             margin: 0;
@@ -61,10 +62,27 @@
             color: #00ff41;
             font-size: 24px;
             z-index: 200;
+            text-align: center;
         }
         
         .hidden {
             display: none;
+        }
+        
+        #errorMessage {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff4444;
+            font-size: 16px;
+            z-index: 200;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ff4444;
+            max-width: 80%;
         }
     </style>
 </head>
@@ -72,7 +90,13 @@
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
         
-        <div id="loading">INITIALISATION DU MOTEUR...</div>
+        <div id="loading">INITIALISATION DU MOTEUR...<br><small>Chargement des modules 3D</small></div>
+        
+        <div id="errorMessage" class="hidden">
+            <strong>ERREUR DE CHARGEMENT</strong><br>
+            <span id="errorText"></span><br>
+            <small>Essayez de recharger la page (F5)</small>
+        </div>
         
         <div id="ui" class="hidden">
             <div>VITESSE: <span id="speed">0</span> km/h</div>
@@ -92,8 +116,7 @@
         </div>
     </div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
-    <script src="src/main.js"></script>
+    <!-- Chargement en tant que module ES pour éviter les erreurs 'export' -->
+    <script type="module" src="src/main.js"></script>
 </body>
 </html>
