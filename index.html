@@ -6,164 +6,74 @@
     <title>Infinite Car Racing 3D</title>
     <link rel="icon" href="data:,">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #1a1a2e, #16213e);
-            overflow: hidden;
-            user-select: none;
-        }
-        
-        #gameContainer {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-        }
-        
-        #gameCanvas {
-            display: block;
-            cursor: none;
-        }
-        
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-            color: #00ff41;
-            font-size: 18px;
-            text-shadow: 0 0 10px #00ff41;
-        }
-        
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            z-index: 100;
-            color: #00ff41;
-            font-size: 14px;
-            text-align: right;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #00ff41;
-        }
-        
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #00ff41;
-            font-size: 24px;
-            z-index: 200;
-            text-align: center;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        #errorMessage {
-            position: absolute;
-            top: 60%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #ff4444;
-            font-size: 16px;
-            z-index: 200;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #ff4444;
-            max-width: 80%;
-        }
-        
-        #loadingProgress {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #888;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; background: #0e1225; overflow: hidden; user-select: none; }
+        #gameContainer { position: relative; width: 100vw; height: 100vh; }
+        #gameCanvas { display: block; }
+        #ui { position: absolute; top: 20px; left: 20px; z-index: 100; color: #00ff41; font-size: 18px; text-shadow: 0 0 10px #00ff41; }
+        #controls { position: absolute; bottom: 20px; right: 20px; z-index: 100; color: #00ff41; font-size: 14px; text-align: right; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border: 1px solid #00ff41; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ff41; font-size: 20px; z-index: 200; text-align: center; }
+        #errorMessage { position: absolute; top: 65%; left: 50%; transform: translate(-50%, -50%); color: #ff4444; font-size: 14px; z-index: 200; text-align: center; background: rgba(0,0,0,0.8); padding: 16px; border-radius: 8px; border: 1px solid #ff4444; max-width: 80%; }
+        .hidden { display: none; }
+        #loadingProgress { margin-top: 8px; font-size: 13px; color: #9ad3a5; }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <canvas id="gameCanvas"></canvas>
-        
-        <div id="loading">
-            INITIALISATION DU MOTEUR...<br>
-            <div id="loadingProgress">Chargement des bibliothèques 3D...</div>
-        </div>
-        
-        <div id="errorMessage" class="hidden">
-            <strong>ERREUR DE CHARGEMENT</strong><br>
-            <span id="errorText"></span><br>
-            <small>Essayez de recharger la page (F5)</small>
-        </div>
-        
-        <div id="ui" class="hidden">
-            <div>VITESSE: <span id="speed">0</span> km/h</div>
-            <div>DISTANCE: <span id="distance">0</span> m</div>
-            <div>FPS: <span id="fps">60</span></div>
-        </div>
-        
-        <div id="controls" class="hidden">
-            <div><strong>CONTROLES</strong></div>
-            <div>↑/W - Accélération</div>
-            <div>↓/S - Frein/Marche arrière</div>
-            <div>←/A - Tourner à gauche</div>
-            <div>→/D - Tourner à droite</div>
-            <div>ESPACE - Frein à main</div>
-            <div>R - Reset voiture</div>
-            <div>P - Pause</div>
-        </div>
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="loading">
+        INITIALISATION DU MOTEUR...<br>
+        <div id="loadingProgress">Téléchargement des bibliothèques...</div>
     </div>
-    
-    <!-- Retour aux builds UMD pour compatibilité Mac -->
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/cannon@0.20.2/build/cannon.min.js"></script>
-    <script>
-        // Vérification du chargement
-        document.getElementById('loadingProgress').textContent = 'Vérification des modules...';
-        
-        function updateLoadingProgress(message) {
-            document.getElementById('loadingProgress').textContent = message;
-        }
-        
-        function showError(message) {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('errorText').textContent = message;
-            document.getElementById('errorMessage').classList.remove('hidden');
-        }
-        
-        // Timeout de sécurité
-        setTimeout(() => {
-            if (!window.gameInitialized) {
-                showError('Timeout de chargement. Rechargez la page ou essayez un autre navigateur.');
-            }
-        }, 10000); // 10 secondes max
-        
-        // Vérification WebGL
-        if (!window.WebGLRenderingContext) {
-            showError('WebGL non supporté par ce navigateur.');
-        } else {
-            // Attendre que les scripts soient chargés puis lancer le jeu
-            setTimeout(() => {
-                if (typeof THREE !== 'undefined' && typeof CANNON !== 'undefined') {
-                    updateLoadingProgress('Démarrage du moteur de jeu...');
-                    // Le script main.js se chargera après
-                } else {
-                    showError('Échec du chargement des bibliothèques 3D.');
-                }
-            }, 500);
-        }
-    </script>
-    <script src="src/main.js"></script>
+
+    <div id="errorMessage" class="hidden">
+        <strong>ERREUR</strong><br>
+        <span id="errorText"></span>
+    </div>
+
+    <div id="ui" class="hidden">
+        <div>VITESSE: <span id="speed">0</span> km/h</div>
+        <div>DISTANCE: <span id="distance">0</span> m</div>
+        <div>FPS: <span id="fps">60</span></div>
+    </div>
+
+    <div id="controls" class="hidden">
+        <div><strong>CONTROLES</strong></div>
+        <div>↑/W - Accélération</div>
+        <div>↓/S - Frein/Marche arrière</div>
+        <div>←/A - Gauche</div>
+        <div>→/D - Droite</div>
+        <div>ESPACE - Frein à main</div>
+        <div>R - Reset voiture</div>
+        <div>P - Pause</div>
+    </div>
+</div>
+
+<!-- Bibliothèques: lock versions et CDN robustes -->
+<script>
+  // Empêche le cache agressif pendant le debug
+  const nocache = (url) => url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+  if (typeof THREE === 'undefined') {
+    document.getElementById('errorText').textContent = 'Échec chargement Three.js';
+    document.getElementById('errorMessage').classList.remove('hidden');
+  } else {
+    document.getElementById('loadingProgress').textContent = 'Three.js OK. Chargement Cannon.js...';
+  }
+</script>
+<!-- Utiliser cannon-es UMD compat: @pmndrs/cannon-es fournit un build UMD via skypack -->
+<script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
+<script>
+  if (typeof CANNON === 'undefined') {
+    document.getElementById('errorText').textContent = 'Échec chargement Cannon.js';
+    document.getElementById('errorMessage').classList.remove('hidden');
+  } else {
+    document.getElementById('loadingProgress').textContent = 'Librairies chargées. Démarrage du jeu...';
+  }
+</script>
+<script src="src/main.js"></script>
 </body>
 </html>
